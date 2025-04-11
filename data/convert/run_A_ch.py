@@ -2,7 +2,7 @@ import os
 import argparse
 from datetime import datetime
 from sunpy.time import parse_time
-from A_CH_processor import process_a_ch  # A_CH_processor.py
+from processor_A_ch import process_a_ch  # processor_A_ch.py
 
 def main():
     parser = argparse.ArgumentParser(
