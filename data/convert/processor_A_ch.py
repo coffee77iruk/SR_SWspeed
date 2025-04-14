@@ -15,7 +15,7 @@ from sunpy.net import hek                   # solar event 검색
 from sunpy.physics.differential_rotation import solar_rotate_coordinate # 차등회전 보정
 from sunpy.time import parse_time           # 시간 문자열 처리
 from shapely.geometry import Point, Polygon # 다각형 처리
-import shapely.vectorized as sv             # 다각형 벡터화 처리
+from shapely import contains_xy             # 다각형 벡터화 처리
 
 from tqdm import tqdm
 import warnings
@@ -113,15 +113,14 @@ def compute_A_CH(fits_file):
     
     # generate a polygon from the rotated CH boundary coordinates
     try:
-
+        tx = rotated_ch_boundary.Tx.value
+        ty = rotated_ch_boundary.Ty.value
+        valid = np.isfinite(tx) & np.isfinite(ty)
+        if np.count_nonzero(valid) < 3:
+            raise ValueError("유효한 경계 좌표가 부족합니다.")
+        
         ch_polygon = Polygon(
-            tx = rotated_ch_boundary.Tx.value
-            ty = rotated_ch_boundary.Ty.value
-            valid = np.isfinite(tx) & np.isfinite(ty)
-            if np.count_nonzero(valid) < 3:
-                raise ValueError("유효한 경계 좌표가 부족합니다.")
             zip(tx[valid], ty[valid])
-            #zip(rotated_ch_boundary.Tx.value, rotated_ch_boundary.Ty.value)
         )
     except Exception as e:
         print(f"fail to generate polygon of CH boundary: {fits_file} -> {e}")
@@ -154,7 +153,7 @@ def compute_A_CH(fits_file):
     # roi_pix_x, roi_pix_y: only valid points in the map
     roi_pix_x = roi_pix_x[valid_points]
     roi_pix_y = roi_pix_y[valid_points]
-    roi_inside = sv.contains(ch_polygon, roi_pix_x, roi_pix_y)
+    roi_inside = contains_xy(ch_polygon, roi_pix_x, roi_pix_y)
 
     overlap_mask = np.zeros_like(mask_lon, dtype=bool)
     overlap_mask[roi_mask] = roi_inside             # inside CH and within ±7.5° slice
