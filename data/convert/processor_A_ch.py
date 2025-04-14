@@ -113,8 +113,15 @@ def compute_A_CH(fits_file):
     
     # generate a polygon from the rotated CH boundary coordinates
     try:
+
         ch_polygon = Polygon(
-            zip(rotated_ch_boundary.Tx.value, rotated_ch_boundary.Ty.value)
+            tx = rotated_ch_boundary.Tx.value
+            ty = rotated_ch_boundary.Ty.value
+            valid = np.isfinite(tx) & np.isfinite(ty)
+            if np.count_nonzero(valid) < 3:
+                raise ValueError("유효한 경계 좌표가 부족합니다.")
+            zip(tx[valid], ty[valid])
+            #zip(rotated_ch_boundary.Tx.value, rotated_ch_boundary.Ty.value)
         )
     except Exception as e:
         print(f"fail to generate polygon of CH boundary: {fits_file} -> {e}")
@@ -143,6 +150,10 @@ def compute_A_CH(fits_file):
     roi_pix_x = pix_x[roi_mask]
     roi_pix_y = pix_y[roi_mask]
 
+    valid_points = np.isfinite(roi_pix_x) & np.isfinite(roi_pix_y)
+    # roi_pix_x, roi_pix_y: only valid points in the map
+    roi_pix_x = roi_pix_x[valid_points]
+    roi_pix_y = roi_pix_y[valid_points]
     roi_inside = sv.contains(ch_polygon, roi_pix_x, roi_pix_y)
 
     overlap_mask = np.zeros_like(mask_lon, dtype=bool)
