@@ -78,15 +78,14 @@ def compute_A_CH(fits_file):
         return None, None
 
     hek_client = hek.HEKClient()
-    start_time = aia_map.date - TimeDelta(2 * u.hour)
-    end_time = aia_map.date + TimeDelta(2 * u.hour)
+    start_time = aia_map.date - TimeDelta(2*u.hour)
+    end_time = aia_map.date + TimeDelta(2*u.hour)
 
     responses = hek_client.search(a.Time(start_time, end_time),
                                   a.hek.CH,
                                   a.hek.FRM.Name == 'SPoCA')
 
     area = 0.0
-    response_index = None
     for i, response in enumerate(responses):
         if response['area_atdiskcenter'] > area and np.abs(response['hgc_y']) < 80.0:
             area = response['area_atdiskcenter']
@@ -102,26 +101,22 @@ def compute_A_CH(fits_file):
     p1 = ch["hpc_boundcc"][9:-2]
     p2 = p1.split(',')
     p3 = [v.split(" ") for v in p2]
-
     ch_date = parse_time(ch['event_starttime'])
+
     """"The coronal hole was detected at different time than the AIA image was taken so we need to rotate it to the map observation time."""
     ch_boundary = SkyCoord([(float(v[0]), float(v[1])) * u.arcsec for v in p3],
                            obstime=ch_date,                 # evebt start time
                            observer="earth",                # observer: Earth
                            frame=frames.Helioprojective)    # frame: Helioprojective
-    rotated_ch_boundary = solar_rotate_coordinate(ch_boundary, time=aia_map.date)
+    rotated_ch_boundary = solar_rotate_coordinate(ch_boundary, 
+                                                  time=aia_map.date)
     
     # generate a polygon from the rotated CH boundary coordinates
     try:
-        tx = rotated_ch_boundary.Tx.value
-        ty = rotated_ch_boundary.Ty.value
-        valid = np.isfinite(tx) & np.isfinite(ty)
-        if np.count_nonzero(valid) < 3:
-            raise ValueError("유효한 경계 좌표가 부족합니다.")
-        
         ch_polygon = Polygon(
-            zip(tx[valid], ty[valid])
+            zip(rotated_ch_boundary.Tx.value, rotated_ch_boundary.Ty.value)
         )
+
     except Exception as e:
         print(f"fail to generate polygon of CH boundary: {fits_file} -> {e}")
         return aia_map.date, None
@@ -180,7 +175,6 @@ def process_a_ch(channel, start_dt, end_dt, cadence_hours, base_dir, time_tolera
     """
     results = []
     step = timedelta(hours=cadence_hours)   # cadence
-    total_steps = int(((end_dt - start_dt).total_seconds() // step.total_seconds())) + 1
     
     # Get all years between start and end dates.
     years = set()
@@ -207,9 +201,8 @@ def process_a_ch(channel, start_dt, end_dt, cadence_hours, base_dir, time_tolera
 
     # Iterate through the time range and process each step.
     current_time = start_dt
-    for _ in tqdm(range(total_steps), desc="Processing FITS files", unit="step"): # 수정 -> year로
-        year = current_time.year                # year of current_time
-        fits_files = precomputed_fits.get(year) # fits_files for the current year
+    for year in tqdm(years, desc="Processing years", unit="year"):
+        fits_files = precomputed_fits.get(year)
 
         if fits_files is None:
             results.append(f"{current_time.strftime('%Y-%m-%d %H')} NoFolder")
@@ -220,45 +213,24 @@ def process_a_ch(channel, start_dt, end_dt, cadence_hours, base_dir, time_tolera
             current_time += step
             continue
 
-
-        best_file = None
-        for f in fits_files:
-            obs_time = extract_datetime_from_filename(f)
+        for fits_file in tqdm(fits_files):
+            obs_time = extract_datetime_from_filename(fits_file)
             if obs_time is None:
                 continue
             obs_dt = obs_time.to_datetime()
-            # "YYYY-MM-DD HH" 형식으로 시간 비교를 수행합니다.
-            if obs_dt.strftime('%Y-%m-%d %H') == current_time.strftime('%Y-%m-%d %H'):
-                best_file = f
-                break  # 일치하는 파일이 있으면 바로 선택합니다.
 
-        #best_file = None
-        #best_diff = None
-        # Iterate through the FITS files to find the closest one.
-        #for f in fits_files:
-        #    obs_time = extract_datetime_from_filename(f)    
-        #    # f: 'E:\\Research\\SR\\input\\CH\\211\\2012\\aia.lev1_euv_12s.2012-01-01T000002Z.211.image_lev1.fits'
-        #    # obs_time: '2012-01-01 00:00:02'
-        #    if obs_time is None:
-        #        continue
-        #    obs_dt = obs_time.to_datetime()
-        #    diff = abs((obs_dt - current_time).total_seconds())
-        #    if diff <= time_tolerance_sec:
-        #        if best_diff is None or diff < best_diff:
-        #            best_diff = diff
-        #            best_file = f
-
-        if best_file:
-            print(f"{current_time}에 해당하는 파일: {best_file}")
-            obs_time, A_CH = compute_A_CH(best_file)
-            if A_CH is not None:
-                results.append(f"{obs_time.strftime('%Y-%m-%d %H')} {A_CH:.4f}")
+            if fits_file:
+                print(f"{obs_dt}에 해당하는 파일: {fits_file}")
+                _, A_CH = compute_A_CH(fits_file)
+                print(obs_dt, A_CH)
+                if A_CH is not None:
+                    results.append(f"{obs_dt.strftime('%Y-%m-%d %H')} {A_CH:.4f}")
+                else:
+                    results.append(f"{obs_dt.strftime('%Y-%m-%d %H')} NaN")
             else:
-                results.append(f"{current_time.strftime('%Y-%m-%d %H')} NaN")
-        else:
-            print(f"{current_time}에 해당하는 파일이 없습니다.")
-            results.append(f"{current_time.strftime('%Y-%m-%d %H')} NoFile")
+                print(f"{obs_dt}에 해당하는 파일이 없습니다.")
+                results.append(f"{obs_dt.strftime('%Y-%m-%d %H')} NoFile")
 
-        current_time += step
-
+            current_time += step
+    
     return results
