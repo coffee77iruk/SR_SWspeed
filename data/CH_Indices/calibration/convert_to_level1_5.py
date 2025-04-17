@@ -21,17 +21,30 @@ https://aiapy.readthedocs.io/en/stable/preparing_data.html
 
 import numpy as np
 import astropy.units as u
-
 import aiapy
 from aiapy.calibrate.util import get_pointing_table
 from aiapy.calibrate.util import get_correction_table
 
+from functools import lru_cache
+from sunpy.time import parse_time
+
+# download correction table only once
+CORR_TBL = get_correction_table("SSW")
+
+@lru_cache(maxsize=256)
+def _cached_pointing(date_iso):
+    """
+    cached the aiapy.get_pointing_table() result by date
+    date_iso: 'YYYY-MM-DDTHH:MM:SS' (str)  <= hashable
+    """
+    date = parse_time(date_iso)
+    return get_pointing_table(
+        "JSOC", time_range=(date - 6*u.hour, date + 6*u.hour)
+    )
+
 "Pointing correction"
 def Pointing_correction(aia_map):
-    pointing_tbl = get_pointing_table(
-        "JSOC",
-        time_range=(aia_map.date - 6*u.hour, aia_map.date + 6*u.hour)
-    )
+    pointing_tbl = _cached_pointing(aia_map.date.isot)
     aia_map_pt = aiapy.calibrate.update_pointing(aia_map, pointing_table=pointing_tbl)
     return aia_map_pt
 
@@ -47,11 +60,9 @@ def Registration(aia_map):
 
 "Degradation correction"
 def Degradation_correction(aia_map):
-    corr_tbl = get_correction_table("SSW")
-
     aia_map_cal = aiapy.calibrate.correct_degradation(
         aia_map,
-        correction_table=corr_tbl
+        correction_table=CORR_TBL
     )
     return aia_map_cal
 
