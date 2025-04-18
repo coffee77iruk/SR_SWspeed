@@ -7,13 +7,10 @@ with a progress bar that 표시 currently processed file.
 import argparse
 from pathlib import Path
 from datetime import datetime
-import multiprocessing as mp
-from concurrent.futures import ProcessPoolExecutor, as_completed
-
 from sunpy.time import parse_time
 from tqdm import tqdm
-import sunpy
 
+import sunpy
 from convert_to_level1_5 import convert_to_level1_5
 
 def strip_invalid_blank(aia_map):
@@ -22,26 +19,7 @@ def strip_invalid_blank(aia_map):
     to avoid astropy VerifyWarning.
     """
     if aia_map.meta.get("BITPIX", 0) < 0 and "BLANK" in aia_map.meta:
-        aia_map.meta.pop("BLANK")
-
-# Run the conversion in parallel using multiprocessing
-def worker(in_path: str, out_path: str) -> tuple[str, bool, str]:
-    """
-    Parameters
-    ----------
-    in_path  : original level 1 FITS
-    out_path : destination file for level 1.5 FITS
-
-    Returns (filename, ok_flag, message)
-    """
-    try:
-        aia_map = sunpy.map.Map(in_path)
-        aia_map_new = convert_to_level1_5(aia_map)
-        strip_invalid_blank(aia_map_new)
-        aia_map_new.save(out_path, overwrite=False)
-        return (Path(in_path).name, True, "")
-    except Exception as exc:
-        return (Path(in_path).name, False, str(exc))
+        aia_map.meta.pop("BLANK") 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -57,8 +35,6 @@ def main() -> None:
                         help="directory containing level 1 FITS files")
     parser.add_argument("--save_directory", type=str, required=True,
                         help="directory to save a level 1.5 FITS files (e.g, E:\Research\SR\input\CH_Indices\EUV_level1.5)")
-    parser.add_argument("--cores", type=int, default=max(1, mp.cpu_count() - 1),
-                        help="parallel workers (default: all-1)")
     args = parser.parse_args()
 
     parent_dir = Path(args.file_directory)
@@ -75,48 +51,44 @@ def main() -> None:
             dst_dir  = save_dir  / chan / str(year)     # destination directory
             dst_dir.mkdir(parents=True, exist_ok=True)
 
-            files = sorted(src_dir.glob("*.fits"))
-            jobs  = []
-
-            for file in files:
-                # Extract the date from the filename
-                try:
-                    file_date = datetime.strptime(file.stem.split(".")[2],
-                                              "%Y-%m-%dT%H%M%SZ")
-                except Exception:
-                    continue
-                # Check if the file date is within the specified range
-                if not (start_dt <= file_date <= end_dt):
-                    continue
-                # Check if the output file already exists
-                outfile = dst_dir / file.name.replace("lev1", "lev15")
-                if outfile.exists():
-                    continue
-                jobs.append((str(file), str(outfile)))
-
-            # jobs: list of tuples (input_path, output_path)
-            if not jobs:
-                print(f"[{chan}] {year}  No files found.")
+            files = [f for f in src_dir.glob("*.fits")]
+            if not files:
+                print(f"[{chan}] {year}: no FITS files in {src_dir}")
                 continue
-            
-            # Process the jobs in parallel
-            ok = err = 0
-            with ProcessPoolExecutor(max_workers=args.cores) as executor:
-                futures = [executor.submit(worker, job[0], job[1]) for job in jobs]
-                # Use tqdm to show progress bar
-                for future in tqdm(as_completed(futures), 
-                                   total=len(futures),
-                                   desc=f"EUV {chan} | year={year}", 
-                                   unit="file"):
-                    filename, success, message = future.result()
-                    if success:
-                        ok += 1
-                    else:
-                        err += 1
-                        tqdm.write(f"    ✖ {filename}: {message}")
 
-            print(f"[{chan}] {year} done ➜ OK:{ok}  ERR:{err}")
+            success = fail = skipped = 0
 
+            with tqdm(files, desc=f"EUV {chan}, year={year}", unit="file") as pbar:
+                for file in pbar:
+                    pbar.set_postfix(file=file.name[:40])
+                    try:
+                        file_date = datetime.strptime(file.stem.split(".")[2],
+                                                      "%Y-%m-%dT%H%M%SZ")
+                    except (IndexError, ValueError):
+                        skipped += 1
+                        continue
+
+                    if not (start_dt <= file_date <= end_dt):
+                        skipped += 1
+                        continue
+
+                    outfile = dst_dir / file.name.replace("lev1", "lev15")
+                    if outfile.exists():
+                        skipped += 1
+                        continue
+
+                    try:
+                        aia_map = sunpy.map.Map(file)
+                        aia_map_new = convert_to_level1_5(aia_map)
+                        strip_invalid_blank(aia_map_new)
+                        aia_map_new.save(outfile, overwrite=False)
+                        success += 1
+                    except Exception as e:
+                        pbar.write(f"[{chan}] {file.name} failed: {e}")
+                        fail += 1
+                pbar.write(
+                    f"[{chan}] {year}  ✔:{success}  ✖:{fail}  ➜skipped:{skipped}"
+                )
     print("All conversions finished.")
 
 if __name__ == '__main__':
@@ -126,4 +98,4 @@ if __name__ == '__main__':
 # To run this script, you can use the command line as follows:
 # conda activate venv
 # cd Research\SR_SWspeed\data\CH_Indices\calibration
-# python sdo_euv_level1_5.py --channel "193,211" --start "2012-01-01" --end "2024-12-31" --file_directory "E:\Research\SR\input\CH_Indices\EUV_level1" --save_directory "E:\Research\SR\input\CH_Indices\EUV_level1.5" --cores 4
+# python sdo_euv_level1_5.py --channel "193,211" --start "2012-01-01" --end "2024-12-31" --file_directory "E:\Research\SR\input\CH_Indices\EUV_level1" --save_directory "E:\Research\SR\input\CH_Indices\EUV_level1.5"

@@ -39,7 +39,7 @@ def _cached_pointing(date_iso):
     """
     date = parse_time(date_iso)
     return get_pointing_table(
-        "JSOC", time_range=(date - 6*u.hour, date + 6*u.hour)
+        "JSOC", time_range=(date - 12*u.hour, date + 12*u.hour)
     )
 
 "Pointing correction"
