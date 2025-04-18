@@ -1,13 +1,14 @@
 """
+Run the conversion of SDO/AIA level 1 FITS files to level 1.5.
+
 Convert SDO/AIA level 1 FITS files to level 1.5 and save them
-with a progress bar that 표시 currently processed file.
+with a progress bar that shows the number of files processed.
 
 """
 
 import argparse
 from pathlib import Path
 from tqdm import tqdm
-import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import sunpy
@@ -54,7 +55,7 @@ def main():
     parser.add_argument("--end", type=str, required=True,
                         help="end date (e.g, 2024-12-31)")
     parser.add_argument("--file_directory", type=str, required=True,
-                        help="directory containing level 1 FITS files")
+                        help="directory containing level 1 FITS files (e.g, E:\Research\SR\input\CH_Indices\EUV_level1)")
     parser.add_argument("--save_directory", type=str, required=True,
                         help="directory to save a level 1.5 FITS files (e.g, E:\Research\SR\input\CH_Indices\EUV_level1.5)")
     parser.add_argument("--cores", type=int, default=4,
@@ -71,30 +72,30 @@ def main():
 
     for chan in channels:
         for year in range(start_dt.year, end_dt.year + 1):
-            src_dir  = parent_dir / chan / str(year)    # source directory
-            dst_dir  = save_dir  / chan / str(year)     # destination directory
-            dst_dir.mkdir(parents=True, exist_ok=True)
+            source_dir  = parent_dir / chan / str(year)         # source directory
+            destination_dir  = save_dir  / chan / str(year)     # destination directory
+            destination_dir.mkdir(parents=True, exist_ok=True)  # create directory if it doesn't exist
 
-            files = sorted(src_dir.glob("*.fits"))
+            files = sorted(source_dir.glob("*.fits"))
             jobs  = []
 
             for file in files:
-                 # Extract the date from the filename
-                 try:
-                     file_date = datetime.strptime(file.stem.split(".")[2],
+                try:
+                    file_date = datetime.strptime(file.stem.split(".")[2],      # Extract the date from the filename
                                                "%Y-%m-%dT%H%M%SZ")
-                 except Exception:
-                     continue
-                 # Check if the file date is within the specified range
-                 if not (start_dt <= file_date <= end_dt):
-                     continue
-                 # Check if the output file already exists
-                 outfile = dst_dir / file.name.replace("lev1", "lev15")
-                 if outfile.exists():
-                     continue
-                 jobs.append((str(file), str(outfile)))
+                except Exception:
+                    continue
+                 
+                if not (start_dt <= file_date <= end_dt):                       # Check if the file date is within the specified range
+                    continue
 
-            # jobs: list of tuples (input_path, output_path)
+                outfile = destination_dir / file.name.replace("lev1", "lev15")  # Check if the output file already exists
+                if outfile.exists():
+                    continue
+
+                jobs.append((str(file), str(outfile)))                          # add a file and its destination path to the jobs list
+
+            # Check if there are any jobs to process
             if not jobs:
                 print(f"[{chan}] {year}  No files found.")
                 continue
@@ -104,9 +105,9 @@ def main():
             with ProcessPoolExecutor(max_workers=args.cores) as executor:
                 futures = [executor.submit(worker, job[0], job[1]) for job in jobs]
                 # Use tqdm to show progress bar
-                for future in tqdm(as_completed(futures), 
+                for future in tqdm(as_completed(futures),
                                 total=len(futures),
-                                desc=f"EUV {chan} | year={year}", 
+                                desc=f"EUV {chan} | year={year}",
                                 unit="file"):
                     filename, success, message = future.result()
                     if success:
@@ -126,4 +127,4 @@ if __name__ == '__main__':
 # To run this script, you can use the command line as follows:
 # conda activate venv
 # cd Research\SR_SWspeed\data\CH_Indices\calibration
-# python run_convert_to_level1_5.py --channel "193,211" --start "2012-01-01" --end "2024-12-31" --file_directory "E:\Research\SR\input\CH_Indices\EUV_level1" --save_directory "E:\Research\SR\input\CH_Indices\EUV_level1.5"
+# python run_convert_to_level1_5.py --channel "193,211" --start "2012-01-01" --end "2024-12-31" --file_directory "E:\Research\SR\input\CH_Indices\EUV_level1" --save_directory "E:\Research\SR\input\CH_Indices\EUV_level1.5" --cores 4
