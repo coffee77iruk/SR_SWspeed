@@ -23,10 +23,17 @@ import numpy as np
 import astropy.units as u
 import aiapy
 from aiapy.calibrate.util import get_pointing_table
-from aiapy.calibrate.util import get_correction_table
 
 from sunpy.time import parse_time   
 from functools import lru_cache     # python 3.9+
+
+def strip_invalid_blank(aia_map):
+    """
+    Remove the BLANK keyword when BITPIX < 0 (float data),
+    to avoid astropy VerifyWarning.
+    """
+    if aia_map.meta.get("BITPIX", 0) < 0 and "BLANK" in aia_map.meta:
+        aia_map.meta.pop("BLANK") 
 
 # caching the pointing table to avoid repeated queries
 @lru_cache(maxsize=1024)
@@ -64,15 +71,24 @@ def Registration(aia_map):
     return aia_map_reg
 
 # Degradation correction
-CORR_TBL = get_correction_table("JSOC")
+_CORR_TBL = None
+
+def set_correction_table(tbl):
+    global _CORR_TBL
+    _CORR_TBL = tbl
+
 def Degradation_correction(aia_map):
     """
     We calibrate the degradation of AIA data to ensure 
     that the physical brightness is consistent across different channels.
     """
+    global _CORR_TBL
+    if _CORR_TBL is None:
+        from aiapy.calibrate.util import get_correction_table
+        _CORR_TBL = get_correction_table("JSOC")
     aia_map_cal = aiapy.calibrate.correct_degradation(
-        aia_map,
-        correction_table=CORR_TBL
+        aia_map, 
+        correction_table=_CORR_TBL
     )
     return aia_map_cal
 
@@ -88,11 +104,12 @@ def Exposure_normalization(aia_map):
     return aia_map_norm
 
 # Main function to convert level 1 to level 1.5
-def convert_to_level1_5(aia_map):
+def convert_to_level1_5(aia_map, skip_pointing=False):
     """
     Convert SDO/AIA data from level 1 to level 1.5.
     """
-    aia_map = Pointing_correction(aia_map)      # Step 1: Pointing correction
+    if not skip_pointing:
+        aia_map = Pointing_correction(aia_map)  # Step 1: Pointing correction
     aia_map = Registration(aia_map)             # Step 4: Registration
     aia_map = Degradation_correction(aia_map)   # Step 5: Degradation correction
     aia_map = Exposure_normalization(aia_map)   # Step 6: Exposure normalization

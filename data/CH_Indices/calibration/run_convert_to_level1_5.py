@@ -11,38 +11,43 @@ from pathlib import Path
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
+import astropy.units as u
 import sunpy
 from sunpy.time import parse_time
 from datetime import datetime
+from aiapy.calibrate.util import get_correction_table
+from aiapy.calibrate.util import get_pointing_table
 
+from convert_to_level1_5 import strip_invalid_blank
 from convert_to_level1_5 import convert_to_level1_5
 
-def strip_invalid_blank(aia_map):
-    """
-    Remove the BLANK keyword when BITPIX < 0 (float data),
-    to avoid astropy VerifyWarning.
-    """
-    if aia_map.meta.get("BITPIX", 0) < 0 and "BLANK" in aia_map.meta:
-        aia_map.meta.pop("BLANK") 
-
+def init_worker():
+    import convert_to_level1_5
+    convert_to_level1_5.set_correction_table(get_correction_table("JSOC"))
+    
 # Run the conversion in parallel using multiprocessing
-def worker(in_path: str, out_path: str) -> tuple[str, bool, str]:
-    """
-    Parameters
-    ----------
-    in_path  : original level 1 FITS
-    out_path : destination file for level 1.5 FITS
- 
-    Returns (filename, ok_flag, message)
-    """
-    try:
-        aia_map = sunpy.map.Map(in_path)
-        aia_map_new = convert_to_level1_5(aia_map)
-        strip_invalid_blank(aia_map_new)
-        aia_map_new.save(out_path, overwrite=False)
-        return (Path(in_path).name, True, "")
-    except Exception as exc:
-        return (Path(in_path).name, False, str(exc))
+def batch_worker(jobs_batch, pointing_cache):
+    from convert_to_level1_5 import convert_to_level1_5, strip_invalid_blank
+    import aiapy
+
+    results = []
+    for in_path, out_path in jobs_batch:
+        try:
+            aia_map = sunpy.map.Map(in_path)
+            # calibrate by using the cached pointing table
+            date_key = aia_map.date.isot[:10]
+            pt_tbl   = pointing_cache[date_key]
+            aia_map  = aiapy.calibrate.update_pointing(
+                          aia_map, pointing_table=pt_tbl)
+
+            # To skip the pointing correction step, set skip_pointing=True
+            aia_map_new = convert_to_level1_5(aia_map, skip_pointing=True)
+            strip_invalid_blank(aia_map_new)
+            aia_map_new.save(out_path, overwrite=False)
+            results.append((Path(in_path).name, True, ""))
+        except Exception as e:
+            results.append((Path(in_path).name, False, str(e)))
+    return results
 
 def main():
     parser = argparse.ArgumentParser(
@@ -69,17 +74,18 @@ def main():
     end_dt = parse_time(args.end).to_datetime()
 
     channels = [chan.strip() for chan in args.channel.split(',')]   # e.g., [193,211]
+    batch_size = 20
 
     for chan in channels:
-        for year in range(start_dt.year, end_dt.year + 1):
+        all_jobs = []
+        years = range(start_dt.year, end_dt.year + 1)
+        for year in tqdm(years, desc=f"[{chan}] Collecting jobs by year"):
             source_dir  = parent_dir / chan / str(year)         # source directory
             destination_dir  = save_dir  / chan / str(year)     # destination directory
             destination_dir.mkdir(parents=True, exist_ok=True)  # create directory if it doesn't exist
 
             files = sorted(source_dir.glob("*.fits"))
-            jobs  = []
-
-            for file in files:
+            for file in tqdm(files, desc=f"[{chan} {year}] Checking files", leave=False):
                 try:
                     file_date = datetime.strptime(file.stem.split(".")[2],      # Extract the date from the filename
                                                "%Y-%m-%dT%H%M%SZ")
@@ -93,32 +99,46 @@ def main():
                 if outfile.exists():
                     continue
 
-                jobs.append((str(file), str(outfile)))                          # add a file and its destination path to the jobs list
+                all_jobs.append((str(file), str(outfile)))                          # add a file and its destination path to the jobs list
 
-            # Check if there are any jobs to process
-            if not jobs:
-                print(f"[{chan}] {year}  No files found.")
-                continue
+        # Check if there are any jobs to process
+        if not all_jobs:
+            print(f"[{chan}] No files found.")
+            continue
 
-            # Process the jobs in parallel
-            ok = err = 0
-            with ProcessPoolExecutor(max_workers=args.cores) as executor:
-                futures = [executor.submit(worker, job[0], job[1]) for job in jobs]
-                # Use tqdm to show progress bar
-                for future in tqdm(as_completed(futures),
-                                total=len(futures),
-                                desc=f"EUV {chan} | year={year}",
-                                unit="file"):
-                    filename, success, message = future.result()
-                    if success:
-                        ok += 1
+        unique_dates = {job[0].split(".")[2][:10] for job in all_jobs}
+        pointing_cache = {}
+        for d in tqdm(unique_dates, desc=f"[{chan}] Caching pointing tables"):
+            tbl = get_pointing_table(
+                "JSOC",
+                time_range=(parse_time(d)-12*u.hour, 
+                            parse_time(d)+12*u.hour)
+            )
+            pointing_cache[d] = tbl
+
+        batches = [
+            all_jobs[i:i+batch_size]
+            for i in range(0, len(all_jobs), batch_size)
+        ]
+
+        ok = err = 0
+        with ProcessPoolExecutor(max_workers=args.cores, initializer=init_worker) as executor:
+            futures = [
+                executor.submit(batch_worker, batch, pointing_cache)
+                for batch in batches
+            ]
+            for future in tqdm(as_completed(futures),
+                               total=len(futures),
+                               desc=f"EUV {chan}",
+                               unit="batch"):
+                for filename, success, msg in future.result():
+                    if success: ok += 1
                     else:
                         err += 1
-                        tqdm.write(f"    ✖ {filename}: {message}")
- 
-            print(f"[{chan}] {year} done ➜ OK:{ok}  ERR:{err}")
- 
-    print("All conversions finished.")
+                        tqdm.write(f" ✖ {filename}: {msg}")
+
+        print(f"[{chan}] done ➜ OK:{ok}  ERR:{err}")
+
 
 if __name__ == '__main__':
     main()
