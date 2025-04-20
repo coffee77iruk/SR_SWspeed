@@ -9,45 +9,31 @@ with a progress bar that shows the number of files processed.
 import argparse
 from pathlib import Path
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
-import astropy.units as u
 import sunpy
 from sunpy.time import parse_time
 from datetime import datetime
-from aiapy.calibrate.util import get_correction_table
-from aiapy.calibrate.util import get_pointing_table
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from convert_to_level1_5 import strip_invalid_blank
 from convert_to_level1_5 import convert_to_level1_5
 
-def init_worker():
-    import convert_to_level1_5
-    convert_to_level1_5.set_correction_table(get_correction_table("JSOC"))
-    
-# Run the conversion in parallel using multiprocessing
-def batch_worker(jobs_batch, pointing_cache):
-    from convert_to_level1_5 import convert_to_level1_5, strip_invalid_blank
-    import aiapy
 
-    results = []
-    for in_path, out_path in jobs_batch:
-        try:
-            aia_map = sunpy.map.Map(in_path)
-            # calibrate by using the cached pointing table
-            date_key = aia_map.date.isot[:10]
-            pt_tbl   = pointing_cache[date_key]
-            aia_map  = aiapy.calibrate.update_pointing(
-                          aia_map, pointing_table=pt_tbl)
+def strip_invalid_blank(aia_map):
+    """
+    Remove the BLANK keyword when BITPIX < 0 (float data),
+    to avoid astropy VerifyWarning.
+    """
+    if aia_map.meta.get("BITPIX", 0) < 0 and "BLANK" in aia_map.meta:
+        aia_map.meta.pop("BLANK") 
 
-            # To skip the pointing correction step, set skip_pointing=True
-            aia_map_new = convert_to_level1_5(aia_map, skip_pointing=True)
-            strip_invalid_blank(aia_map_new)
-            aia_map_new.save(out_path, overwrite=False)
-            results.append((Path(in_path).name, True, ""))
-        except Exception as e:
-            results.append((Path(in_path).name, False, str(e)))
-    return results
+def process_and_save(infile: str, outfile: str):
+    """
+    Save a FITS file after converting to level 1.5
+    """
+    aia_map = sunpy.map.Map(infile)
+    aia_map_new = convert_to_level1_5(aia_map)
+    strip_invalid_blank(aia_map_new)
+    aia_map_new.save(outfile, overwrite=False)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -62,7 +48,7 @@ def main():
     parser.add_argument("--file_directory", type=str, required=True,
                         help="directory containing level 1 FITS files (e.g, E:\Research\SR\input\CH_Indices\EUV_level1)")
     parser.add_argument("--save_directory", type=str, required=True,
-                        help="directory to save a level 1.5 FITS files (e.g, E:\Research\SR\input\CH_Indices\EUV_level1.5)")
+                        help="directory to save a level 1.5 FITS files (e.g, D:\Research_data\EUV)")
     parser.add_argument("--cores", type=int, default=4,
                         help="number of cores to use for processing")
     args = parser.parse_args()
@@ -74,71 +60,50 @@ def main():
     end_dt = parse_time(args.end).to_datetime()
 
     channels = [chan.strip() for chan in args.channel.split(',')]   # e.g., [193,211]
-    batch_size = 20
+    years = range(start_dt.year, end_dt.year + 1)
 
     for chan in channels:
-        all_jobs = []
-        years = range(start_dt.year, end_dt.year + 1)
-        for year in tqdm(years, desc=f"[{chan}] Collecting jobs by year"):
-            source_dir  = parent_dir / chan / str(year)         # source directory
-            destination_dir  = save_dir  / chan / str(year)     # destination directory
-            destination_dir.mkdir(parents=True, exist_ok=True)  # create directory if it doesn't exist
+        for year in years:
+            source_dir = parent_dir / str(chan) / str(year)
+            destination_dir = save_dir / str(chan)/ str(year)
+            destination_dir.mkdir(parents=True, exist_ok=True)
 
-            files = sorted(source_dir.glob("*.fits"))
-            for file in tqdm(files, desc=f"[{chan} {year}] Checking files", leave=False):
+            destination_files = []
+            for file in sorted(source_dir.glob("*.fits")):
                 try:
-                    file_date = datetime.strptime(file.stem.split(".")[2],      # Extract the date from the filename
-                                               "%Y-%m-%dT%H%M%SZ")
+                    file_dt = datetime.strptime(file.stem.split(".")[2],
+                                                "%Y-%m-%dT%H%M%SZ")
                 except Exception:
                     continue
-                 
-                if not (start_dt <= file_date <= end_dt):                       # Check if the file date is within the specified range
+                if not (start_dt <= file_dt <= end_dt):
                     continue
 
-                outfile = destination_dir / file.name.replace("lev1", "lev15")  # Check if the output file already exists
-                if outfile.exists():
+                outpath = destination_dir / file.name.replace("lev1", "lev1_5")
+                if outpath.exists():
                     continue
 
-                all_jobs.append((str(file), str(outfile)))                          # add a file and its destination path to the jobs list
+                destination_files.append((str(file), str(outpath)))
 
-        # Check if there are any jobs to process
-        if not all_jobs:
-            print(f"[{chan}] No files found.")
-            continue
+            if not destination_files:
+                continue
 
-        unique_dates = {job[0].split(".")[2][:10] for job in all_jobs}
-        pointing_cache = {}
-        for d in tqdm(unique_dates, desc=f"[{chan}] Caching pointing tables"):
-            tbl = get_pointing_table(
-                "JSOC",
-                time_range=(parse_time(d)-12*u.hour, 
-                            parse_time(d)+12*u.hour)
-            )
-            pointing_cache[d] = tbl
+            with ProcessPoolExecutor(max_workers=args.cores) as executor:
+                futures = {
+                    executor.submit(process_and_save, inp, outp): (inp, outp)
+                    for inp, outp in destination_files
+                }
 
-        batches = [
-            all_jobs[i:i+batch_size]
-            for i in range(0, len(all_jobs), batch_size)
-        ]
+                for future in tqdm(as_completed(futures),
+                                   total=len(futures),
+                                   desc=f"EUV {chan} | year={year}",
+                                   unit="file"):
+                    inp, outp = futures[future]
+                    try:
+                        future.result()
+                    except Exception as e:
+                        tqdm.write(f"[ERROR] {Path(inp).name} -> {e}")
 
-        ok = err = 0
-        with ProcessPoolExecutor(max_workers=args.cores, initializer=init_worker) as executor:
-            futures = [
-                executor.submit(batch_worker, batch, pointing_cache)
-                for batch in batches
-            ]
-            for future in tqdm(as_completed(futures),
-                               total=len(futures),
-                               desc=f"EUV {chan}",
-                               unit="batch"):
-                for filename, success, msg in future.result():
-                    if success: ok += 1
-                    else:
-                        err += 1
-                        tqdm.write(f" ✖ {filename}: {msg}")
-
-        print(f"[{chan}] done ➜ OK:{ok}  ERR:{err}")
-
+    print("All conversions finished.")
 
 if __name__ == '__main__':
     main()
@@ -147,4 +112,4 @@ if __name__ == '__main__':
 # To run this script, you can use the command line as follows:
 # conda activate venv
 # cd Research\SR_SWspeed\data\CH_Indices\calibration
-# python run_convert_to_level1_5.py --channel "193,211" --start "2012-01-01" --end "2024-12-31" --file_directory "E:\Research\SR\input\CH_Indices\EUV_level1" --save_directory "E:\Research\SR\input\CH_Indices\EUV_level1.5" --cores 4
+# python run_convert_to_level1_5.py --channel "193,211" --start "2012-01-01" --end "2023-12-31" --file_directory "E:\Research\SR\input\CH_Indices\EUV_level1" --save_directory "D:\Research_data\EUV"

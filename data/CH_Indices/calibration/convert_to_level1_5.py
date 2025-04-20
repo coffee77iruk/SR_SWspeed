@@ -23,37 +23,21 @@ import numpy as np
 import astropy.units as u
 import aiapy
 from aiapy.calibrate.util import get_pointing_table
+from aiapy.calibrate.util import get_correction_table
 
-from sunpy.time import parse_time   
-from functools import lru_cache     # python 3.9+
-
-def strip_invalid_blank(aia_map):
-    """
-    Remove the BLANK keyword when BITPIX < 0 (float data),
-    to avoid astropy VerifyWarning.
-    """
-    if aia_map.meta.get("BITPIX", 0) < 0 and "BLANK" in aia_map.meta:
-        aia_map.meta.pop("BLANK") 
-
-# caching the pointing table to avoid repeated queries
-@lru_cache(maxsize=1024)
-def safe_get_pointing(date_day: str):
-    try:
-        return get_pointing_table("JSOC",                           # JSOC: Joint Science Operations Center
-                    time_range=(parse_time(date_day) - 12*u.hour,   # parse_time(date_day): exact time
-                                parse_time(date_day) + 12*u.hour))
-    except Exception:
-        raise RuntimeError("JSOC query failed. You can try to use SSW instead.")
+from sunpy.time import parse_time
 
 # Pointing correction
 def Pointing_correction(aia_map):
     """
     We consider the satellite's attitude changes and movements to adjust the positioning of AIA images.
     """
-    pointing_tbl = safe_get_pointing(aia_map.date.isot[:10])  # YYYY-MM-DD
-    aia_map_pt = aiapy.calibrate.update_pointing(
-        aia_map, pointing_table=pointing_tbl
+    ref_date = parse_time(aia_map.date.isot[:10])
+    pointing_tbl = get_pointing_table(
+        "lmsal",
+        time_range=(ref_date - 6*u.hour, ref_date + 6*u.hour)
     )
+    aia_map_pt = aiapy.calibrate.update_pointing(aia_map, pointing_table=pointing_tbl)
     return aia_map_pt
 
 # Registration
@@ -70,25 +54,16 @@ def Registration(aia_map):
     )
     return aia_map_reg
 
-# Degradation correction
-_CORR_TBL = None
-
-def set_correction_table(tbl):
-    global _CORR_TBL
-    _CORR_TBL = tbl
-
+# Degradation correction 
 def Degradation_correction(aia_map):
     """
     We calibrate the degradation of AIA data to ensure 
     that the physical brightness is consistent across different channels.
     """
-    global _CORR_TBL
-    if _CORR_TBL is None:
-        from aiapy.calibrate.util import get_correction_table
-        _CORR_TBL = get_correction_table("JSOC")
+    corr_tbl = get_correction_table("SSW")
     aia_map_cal = aiapy.calibrate.correct_degradation(
         aia_map, 
-        correction_table=_CORR_TBL
+        correction_table=corr_tbl
     )
     return aia_map_cal
 
@@ -99,17 +74,16 @@ def Exposure_normalization(aia_map):
     """
     exp_time = aia_map.exposure_time
     aia_map_norm = aia_map / exp_time
-    aia_map_norm.meta['BUNIT'] = 'DN / s'
-    aia_map_norm.meta['EXPCORR'] = True
+    #aia_map_norm.meta['BUNIT'] = 'DN / s'
+    #aia_map_norm.meta['EXPCORR'] = True
     return aia_map_norm
 
 # Main function to convert level 1 to level 1.5
-def convert_to_level1_5(aia_map, skip_pointing=False):
+def convert_to_level1_5(aia_map):
     """
     Convert SDO/AIA data from level 1 to level 1.5.
     """
-    if not skip_pointing:
-        aia_map = Pointing_correction(aia_map)  # Step 1: Pointing correction
+    aia_map = Pointing_correction(aia_map)      # Step 1: Pointing correction
     aia_map = Registration(aia_map)             # Step 4: Registration
     aia_map = Degradation_correction(aia_map)   # Step 5: Degradation correction
     aia_map = Exposure_normalization(aia_map)   # Step 6: Exposure normalization
