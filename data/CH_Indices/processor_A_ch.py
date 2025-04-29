@@ -83,7 +83,7 @@ def compute_A_CH(fits_file):
 
     responses = hek_client.search(a.Time(start_time, end_time),
                                   a.hek.CH,
-                                  a.hek.FRM.Name == 'SPoCA')
+                                  a.hek.FRM.Name == 'SPoCA')    # segmentation model: SPoCA
 
     area = 0.0
     for i, response in enumerate(responses):
