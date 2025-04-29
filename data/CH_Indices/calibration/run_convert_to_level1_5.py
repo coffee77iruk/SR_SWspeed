@@ -16,15 +16,7 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from convert_to_level1_5 import convert_to_level1_5
-
-
-def strip_invalid_blank(aia_map):
-    """
-    Remove the BLANK keyword when BITPIX < 0 (float data),
-    to avoid astropy VerifyWarning.
-    """
-    if aia_map.meta.get("BITPIX", 0) < 0 and "BLANK" in aia_map.meta:
-        aia_map.meta.pop("BLANK") 
+import warnings
 
 def process_and_save(infile: str, outfile: str):
     """
@@ -32,8 +24,8 @@ def process_and_save(infile: str, outfile: str):
     """
     aia_map = sunpy.map.Map(infile)
     aia_map_new = convert_to_level1_5(aia_map)
-    strip_invalid_blank(aia_map_new)
-    aia_map_new.save(outfile, overwrite=False)
+    
+    aia_map_new.save(outfile)
 
 def main():
     parser = argparse.ArgumentParser(

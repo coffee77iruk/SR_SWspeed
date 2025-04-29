@@ -32,11 +32,15 @@ def Pointing_correction(aia_map):
     """
     We consider the satellite's attitude changes and movements to adjust the positioning of AIA images.
     """
-    ref_date = parse_time(aia_map.date.isot[:10])
+    ref_date = parse_time(aia_map.date.isot)
+    # select a lmsal or jsoc
     pointing_tbl = get_pointing_table(
-        "lmsal",
+        "jsoc", 
         time_range=(ref_date - 6*u.hour, ref_date + 6*u.hour)
     )
+    if aia_map.meta.get("SAT_ROT") is None:
+        aia_map.meta["SAT_ROT"] = 0.0
+    
     aia_map_pt = aiapy.calibrate.update_pointing(aia_map, pointing_table=pointing_tbl)
     return aia_map_pt
 
