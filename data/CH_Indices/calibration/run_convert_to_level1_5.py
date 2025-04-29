@@ -102,6 +102,7 @@ if __name__ == '__main__':
 
 
 # To run this script, you can use the command line as follows:
+
 # conda activate venv
 # cd Research\SR_SWspeed\data\CH_Indices\calibration
-# python run_convert_to_level1_5.py --channel "193,211" --start "2012-01-01" --end "2023-12-31" --file_directory "E:\Research\SR\input\CH_Indices\EUV_level1" --save_directory "D:\Research_data\EUV"
+# python run_convert_to_level1_5.py --channel "193,211" --start "2012-01-01" --end "2024-12-31" --file_directory "E:\Research\SR\input\CH_Indices\EUV_level1" --save_directory "D:\Research_data\EUV"
