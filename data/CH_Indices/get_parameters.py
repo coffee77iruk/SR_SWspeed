@@ -1,10 +1,19 @@
 """
-Run a extracting of CH_Indics values.
+Extract CH_Indics values from SDO/AIA level 1.5 FITS files and save to CSV.
 
-...
+Usage:
+  python get_parameters.py \
+    --channel "193,211" \
+    --start "2012-01-01" \
+    --end "2024-12-31" \
+    --cadence 12 \
+    --base_dir "D:/Data/EUV" \
+    --save_dir "D:/Data/EUV" \
+    --cores 4
 
 """
 
+import os
 import numpy as np
 import pandas as pd
 
@@ -21,9 +30,56 @@ from functools import partial
 
 from processing import get_A_CH, get_P_CH
 
-import warnings
 
-def get_parameter(file):
+def get_last_processed(save_file: Path, fmt: str = '%Y-%m-%dT%H:%M:%S'):
+    """
+    Read the last line in `save_file` and parse its datetime.
+
+    """
+    if not save_file.exists() or save_file.stat().st_size == 0:
+        return None
+    with open(save_file, 'rb') as f:
+        try:
+            # Seek from end to find start of last line
+            f.seek(-2, os.SEEK_END)
+            while f.read(1) != b'\n':
+                f.seek(-2, os.SEEK_CUR)
+        except OSError:
+            # File too small, rewind to start
+            f.seek(0)
+        # Read and decode the last line
+        last_line = f.readline().decode().strip()
+
+    if not last_line:
+        return None     # No valid line found
+    
+    # The timestamp is the first CSV field
+    last_dt_str = last_line.split(',')[0]
+    try:
+        return datetime.strptime(last_dt_str, fmt)
+    except ValueError:
+        # Format mismatch or parse error
+        return None
+    
+
+def process_dt(dt: datetime, chan: str, source_dir: Path):
+    """
+    For a given datetime `dt` and channel name, find the corresponding FITS file
+    and extract CH indices.
+
+    """
+    prefix = dt.strftime('%Y-%m-%dT%H')
+    pattern = f"aia.lev1_5_euv_12s.{prefix}*Z.{chan}.image_lev1_5.fits"
+    matches = list(source_dir.glob(pattern))
+    fpath = matches[0] if matches else source_dir / 'file_not_found.fits'
+    return dt, fpath, *get_parameter(fpath)
+
+
+def get_parameter(file: Path):
+    """
+    Call processing functions to compute CH indices for the given FITS file.
+
+    """
     if file.exists():
         try:
             t_a, a_ch = get_A_CH(file)
@@ -35,17 +91,21 @@ def get_parameter(file):
     else:
         return np.nan, np.nan, np.nan
 
-# processing function
-def process_dt(dt, chan, source_dir):
-    prefix = dt.strftime('%Y-%m-%dT%H')
-    pattern = f"aia.lev1_5_euv_12s.{prefix}*Z.{chan}.image_lev1_5.fits"
-    matches = list(source_dir.glob(pattern))
-    if matches:
-        fpath = matches[0]
-    else:
-        # dummy path to trigger nan in get_parameter
-        fpath = source_dir / 'file_not_found.fits'
-    return dt, *get_parameter(fpath)
+
+def write_line(save_file: Path, dt: datetime, a_ch, p_ch30, p_ch90):
+    """
+    Append a CSV line for the given datetime and CH indices values.
+    Always uses `dt` as the timestamp for consistency.
+
+    """
+    time_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
+    a_val = a_ch[1] if isinstance(a_ch, tuple) else a_ch
+    p30_val = p_ch30[1] if isinstance(p_ch30, tuple) else p_ch30
+    p90_val = p_ch90[1] if isinstance(p_ch90, tuple) else p_ch90
+    line = f"{time_str},{a_val},{p30_val},{p90_val}\n"
+    with open(save_file, 'a') as f:
+        f.write(line)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -75,82 +135,67 @@ def main():
 
     channels = [chan.strip() for chan in args.channel.split(',')]   # e.g., [193,211]
     years = range(start_dt.year, end_dt.year + 1)
+    fmt = '%Y-%m-%dT%H:%M:%S'
 
     for chan in channels:
+        save_file = save_dir / str(chan) / f"CH_Indics_{chan}.csv"
+        save_file.parent.mkdir(parents=True, exist_ok=True)
+        # Initialize file with header if empty or new
+        if not save_file.exists() or save_file.stat().st_size == 0:
+            save_file.write_text("datetime,A_CH,P_CH30,P_CH90\n")
+
         for year in years:
             source_dir = base_dir / str(chan) / str(year)
-            destination_dir = save_dir / str(chan)
-            destination_dir.mkdir(parents=True, exist_ok=True)
-            save_file = destination_dir / f"CH_Indics_{chan}.csv"   # save_file is a csv file.
 
-            # --- resume logic ---
-            if save_file.exists():
-                df = pd.read_csv(save_file)
-                df.columns = df.columns.str.strip()
-                if 'datetime' not in df.columns:
-                    alt = [c for c in df.columns if c.strip().lower() == 'datetime']
-                    if alt:
-                        df.rename(columns={alt[0]: 'datetime'}, inplace=True)
-                    else:
-                        raise KeyError(f"No 'datetime' column; existing columns: {df.columns.tolist()}")
-                df['datetime'] = pd.to_datetime(
-                    df['datetime'],
-                    format="%Y-%m-%d_%H",
-                    errors='coerce'
-                )
-                processed = set(df['datetime'].dt.to_pydatetime())
+            # Define the processing window for this year
+            year_start = max(start_dt, datetime(year, 1, 1, 0, 0, 0))
+            year_end = min(end_dt, datetime(year, 12, 31, 23, 59, 59))
+            last_dt = get_last_processed(save_file, fmt)
+
+            # If we've already processed beyond the year start, pick up from there
+            if last_dt and last_dt + timedelta(hours=args.cadence) > year_start:
+                current = last_dt + timedelta(hours=args.cadence)
             else:
-                save_file.write_text("datetime,A_CH,P_CH30,P_CH90\n")
-                processed = set()
+                current = year_start
 
-            # build expected datetime list for this year
-            year_start = max(start_dt, datetime(year, 1, 1, 0, 0))
-            year_end   = min(end_dt,   datetime(year, 12, 31, 23, 59, 59))
-            current = year_start
+            # Build list of datetimes at the specified cadence
             dt_list = []
             while current <= year_end:
                 dt_list.append(current)
                 current += timedelta(hours=args.cadence)
 
-            # filter out already processed
-            to_do = [dt for dt in dt_list if dt not in processed]
+            if not dt_list:
+                continue
 
-            def write_line(dt, a_ch, p_ch30, p_ch90):
-                # datetime from map Time or fallback dt
-                if isinstance(a_ch, tuple) and a_ch[0] is not None:
-                    time_str = a_ch[0].isot.split('.')[0]
-                else:
-                    time_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
-                # values only
-                a_val = a_ch[1] if isinstance(a_ch, tuple) else a_ch
-                p30_val = p_ch30[1] if isinstance(p_ch30, tuple) else p_ch30
-                p90_val = p_ch90[1] if isinstance(p_ch90, tuple) else p_ch90
-                line = f"{time_str},{a_val},{p30_val},{p90_val}\n"
-                save_file.open('a').write(line)
+            desc = f"Wave {chan} Year {year}"
+            # Partially apply fixed arguments for worker function
+            worker = partial(process_dt, chan=chan, source_dir=source_dir)
 
-            # run
-            if args.cores > 1 and to_do:
-                worker = partial(process_dt, chan=chan, source_dir=source_dir)
+            # Parallel or serial processing based on core count
+            if args.cores > 1:
                 with Pool(args.cores) as pool:
-                    for dt, a_ch, p_ch30, p_ch90 in tqdm(
-                        pool.imap(worker, to_do),
-                        total=len(to_do),
-                        desc=f"Channel {chan} Year {year}", unit="time"
-                    ):
-                        write_line(dt, a_ch, p_ch30, p_ch90)
+                    pbar = tqdm(pool.imap(worker, dt_list), total=len(dt_list), unit="step")
+                    for dt, fpath, a_ch, p_ch30, p_ch90 in pbar:
+                        pbar.set_description(f"{desc} | {fpath.name.split('.')[2]}")
+                        write_line(save_file, dt, a_ch, p_ch30, p_ch90)
             else:
-                for dt, a_ch, p_ch30, p_ch90 in tqdm(
-                    (process_dt(dt, chan, source_dir) for dt in to_do),
-                    total=len(to_do),
-                    desc=f"Channel {chan} Year {year}", unit="time"
-                ):
-                    write_line(dt, a_ch, p_ch30, p_ch90)
+                pbar = tqdm((process_dt(dt, chan, source_dir) for dt in dt_list),
+                            total=len(dt_list), unit="step")
+                for dt, fpath, a_ch, p_ch30, p_ch90 in pbar:
+                    pbar.set_description(f"{desc} | {fpath.name.split('.')[2]}")
+                    write_line(save_file, dt, a_ch, p_ch30, p_ch90)
 
-    print("All running is finished.")
+        print(f"Channel {chan} processing complete.")
+
+    print("All running finished.")
+
 
 if __name__ == "__main__":
     mp.freeze_support()
     main()
+
+
+# To run this script, you can use the command line as follows:
 
 # conda activate venv
 # cd Research\SR_SWspeed\data\CH_Indices
