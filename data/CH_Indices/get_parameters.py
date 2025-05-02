@@ -167,7 +167,7 @@ def main():
             if not dt_list:
                 continue
 
-            desc = f"Wave {chan} Year {year}"
+            desc = f"Wavelength {chan} Year {year}"
             # Partially apply fixed arguments for worker function
             worker = partial(process_dt, chan=chan, source_dir=source_dir)
 
