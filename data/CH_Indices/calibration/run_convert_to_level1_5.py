@@ -40,7 +40,7 @@ def main():
     parser.add_argument("--file_directory", type=str, required=True,
                         help="directory containing level 1 FITS files (e.g, E:\Research\SR\input\CH_Indices\EUV_level1)")
     parser.add_argument("--save_directory", type=str, required=True,
-                        help="directory to save a level 1.5 FITS files (e.g, D:\Research_data\EUV)")
+                        help="directory to save a level 1.5 FITS files (e.g, D:\Data\EUV)")
     parser.add_argument("--cores", type=int, default=4,
                         help="number of cores to use for processing")
     args = parser.parse_args()
