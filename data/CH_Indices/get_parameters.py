@@ -71,7 +71,7 @@ def process_dt(dt: datetime, chan: str, source_dir: Path):
     prefix = dt.strftime('%Y-%m-%dT%H')
     pattern = f"aia.lev1_5_euv_12s.{prefix}*Z.{chan}.image_lev1_5.fits"
     matches = list(source_dir.glob(pattern))
-    fpath = matches[0] if matches else source_dir / 'file_not_found.fits'
+    fpath = matches[0] if matches else source_dir / 'aia.lev1_5_euv_12s.filenotfound.fits'
     return dt, fpath, *get_parameter(fpath)
 
 
