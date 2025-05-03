@@ -68,10 +68,34 @@ def process_dt(dt: datetime, chan: str, source_dir: Path):
     and extract CH indices.
 
     """
-    prefix = dt.strftime('%Y-%m-%dT%H')
-    pattern = f"aia.lev1_5_euv_12s.{prefix}*Z.{chan}.image_lev1_5.fits"
+    #prefix = dt.strftime('%Y-%m-%dT%H')
+    #pattern = f"aia.lev1_5_euv_12s.{prefix}*Z.{chan}.image_lev1_5.fits"
+    #matches = list(source_dir.glob(pattern))
+    #fpath = matches[0] if matches else source_dir / 'aia.lev1_5_euv_12s.filenotfound.fits'
+
+    pattern = f"aia.lev1_5_euv_12s.*Z.{chan}.image_lev1_5.fits"
     matches = list(source_dir.glob(pattern))
-    fpath = matches[0] if matches else source_dir / 'aia.lev1_5_euv_12s.filenotfound.fits'
+
+    best_file = None
+    min_diff = float('inf')
+
+    for f in matches:
+        try:
+            # 'aia.lev1_5_euv_12s.2016-12-31T235959Z.211.image_lev1_5.fits'
+            ts_str = f.name.split('.')[2]               # '2016-12-31T235959Z'
+            file_dt = datetime.strptime(ts_str, '%Y-%m-%dT%H%M%SZ')
+        except Exception:
+            continue
+        diff = abs((file_dt - dt).total_seconds())
+        if diff < min_diff:
+            min_diff = diff
+            best_file = f
+
+    if best_file is None or min_diff > 60:  # if a difference > 1-min -> none
+        fpath = source_dir / 'aia.lev1_5_euv_12s.filenotfound.fits'
+    else:
+        fpath = best_file
+
     return dt, fpath, *get_parameter(fpath)
 
 
