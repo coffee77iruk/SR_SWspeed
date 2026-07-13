@@ -9,6 +9,8 @@ plot_binned_performance      -> paper Figure: MAE/RMSE/Bias binned by OMNI speed
 plot_binned_performance_heatmap -> supplementary (not published): same binned stats,
                                 shown as a heatmap + line plot; notebook-only, not saved
                                 as a standalone figures/ deliverable.
+plot_latitude_combo_heatmap  -> supplementary: RMSE/MAE/CC across all A_CH/P_CH
+                                latitude-band combinations, published A60xP30 highlighted.
 """
 
 import numpy as np
@@ -264,4 +266,46 @@ def plot_binned_performance_heatmap(stats_dict, bin_labels, color_map,
     handles, labels = axes_line[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=len(models), fontsize=24,
               framealpha=0, bbox_to_anchor=(0.5, 0.97))
+    return fig
+
+
+def plot_latitude_combo_heatmap(combo_df, phase="Entire", metrics=("RMSE", "MAE", "CC"),
+                                highlight=(60, 30), a_bands=(30, 60, 90), p_bands=(30, 60, 90)):
+    """
+    Heatmap of RMSE/MAE/CC across every A_CH/P_CH latitude-band combination for
+    one phase (output of evaluate_latitude_combinations). The published formula's
+    band combo (default A60xP30) is bolded. Supplementary/exploratory -- not a
+    published figure, just returned for inline notebook display.
+    """
+    fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 4.2))
+    if len(metrics) == 1:
+        axes = [axes]
+
+    sub = combo_df[combo_df["phase"] == phase]
+    a_desc = sorted(a_bands, reverse=True)
+
+    for ax, metric in zip(axes, metrics):
+        pivot = sub.pivot(index="A_band", columns="P_band", values=metric)
+        pivot = pivot.reindex(index=a_bands, columns=p_bands).iloc[::-1]
+
+        cmap = "viridis_r" if metric in ("RMSE", "MAE") else "viridis"
+        im = ax.imshow(pivot.values, cmap=cmap, aspect="auto")
+
+        ax.set_xticks(range(len(p_bands))); ax.set_xticklabels(p_bands)
+        ax.set_yticks(range(len(a_bands))); ax.set_yticklabels(a_desc)
+        ax.set_xlabel(r"$P_{CH}$ latitude band [deg]")
+        ax.set_ylabel(r"$A_{CH}$ latitude band [deg]")
+        ax.set_title(f"{metric} ({phase} period)")
+
+        for i, a in enumerate(a_desc):
+            for j, p in enumerate(p_bands):
+                val = pivot.loc[a, p]
+                is_best = (a, p) == highlight
+                ax.text(j, i, f"{val:.1f}" if metric != "CC" else f"{val:.2f}",
+                        ha="center", va="center", color="white", fontsize=12,
+                        fontweight="bold" if is_best else "normal")
+
+        fig.colorbar(im, ax=ax, label=metric)
+
+    plt.tight_layout()
     return fig

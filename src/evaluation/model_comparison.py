@@ -10,6 +10,7 @@ yearly / phase, optionally with DTW) instead of three near-identical copies.
 """
 
 import os
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -161,6 +162,36 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
     return out.sort_values(sort_cols).reset_index(drop=True)
 
 
+def evaluate_latitude_combinations(df, a_bands=(30, 60, 90), p_bands=(30, 60, 90),
+                                   bg_const=372.1075472, groups=None):
+    """
+    Build the SR formula for every A_CH/P_CH latitude-band combination
+    (sr_A{a}_P{p} = sqrt(A_CH{a}_193_lag4 * P_CH{p}_211_lag4) + sqrt(speed_p27 * bg_const))
+    and evaluate each one per solar-cycle phase (plus "Entire" = all years),
+    reusing evaluate_metrics rather than a separate copy of the metrics logic.
+
+    Returns a DataFrame like evaluate_metrics(group_by="phase") with extra
+    A_band/P_band integer columns, so the published A60xP30 formula's rank
+    among all combinations can be checked per phase.
+    """
+    df = df.copy()
+    combo_cols = []
+    for a in a_bands:
+        for p in p_bands:
+            col = f"sr_A{a}_P{p}"
+            expr = f"sqrt(A_CH{a}_193_lag4 * P_CH{p}_211_lag4) + sqrt(speed_p27 * {bg_const})"
+            df[col] = df.eval(expr, engine="python", local_dict={"np": np})
+            combo_cols.append(col)
+
+    groups = dict(groups or SOLAR_CYCLE_PHASES)
+    groups["Entire"] = sorted({y for years in groups.values() for y in years})
+
+    out = evaluate_metrics(df, group_by="phase", groups=groups, model_cols=combo_cols)
+    out["A_band"] = out["model"].str.extract(r"sr_A(\d+)_P\d+").astype(int)
+    out["P_band"] = out["model"].str.extract(r"sr_A\d+_P(\d+)").astype(int)
+    return out
+
+
 def compute_binned_stats(df, model_specs, speed_bins, min_samples=10,
                          n_bootstrap=1000, ci=95, seed=42):
     """
@@ -227,3 +258,34 @@ def compute_binned_stats(df, model_specs, speed_bins, min_samples=10,
         stats_dict[label] = pd.DataFrame(rows).set_index("bin")
 
     return stats_dict, bin_labels
+
+
+def load_sunspot_numbers(path_m, path_ms, start_year=2010, end_year=2024):
+    """
+    Parse SIDC monthly (path_m) and 13-month-smoothed (path_ms) sunspot number
+    files (SN_m_tot_V2.0.txt / SN_ms_tot_V2.0.txt format).
+
+    Returns (date, sunspot_num_m, sunspot_num_ms).
+    """
+    date, sunspot_num_m, sunspot_num_ms = [], [], []
+
+    with open(path_m, "r") as f:
+        for line in f:
+            try:
+                dt = datetime.strptime(line[:7], "%Y %m")
+                if start_year <= dt.year <= end_year:
+                    date.append(dt)
+                    sunspot_num_m.append(float(line[18:23]))
+            except ValueError:
+                continue
+
+    with open(path_ms, "r") as f:
+        for line in f:
+            try:
+                dt = datetime.strptime(line[:7], "%Y %m")
+                if start_year <= dt.year <= end_year:
+                    sunspot_num_ms.append(float(line[18:23]))
+            except ValueError:
+                continue
+
+    return date, sunspot_num_m, sunspot_num_ms
