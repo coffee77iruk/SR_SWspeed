@@ -114,15 +114,14 @@ def detect_HSE_blocks(Time: pd.Series, Speed: pd.Series) -> dict:
     return result
 
 
-def plot_peaks(ax, sir_dict: dict, speed_series: pd.Series,
-               time_all: pd.Series, time_year: pd.Series,
-               icme_mask: np.ndarray, color: str,
-               markersize: int = 15) -> list:
+def get_peaks(sir_dict: dict, speed_series: pd.Series,
+             time_all: pd.Series, time_year: pd.Series,
+             icme_mask: np.ndarray) -> list:
     """
-    Plot the peak speed marker (▼) for each SIR event that falls within
-    time_year and is not masked as an ICME.
-
-    Returns a list of (timestamp, speed) tuples for each detected peak.
+    Find the peak speed (timestamp, speed) for each SIR event that falls
+    within time_year and is not masked as an ICME. Pure computation, no
+    plotting -- used both by plot_peaks() and by code that only needs the
+    peak list (e.g. event-detection metrics).
     """
     peak_list = []
     t0, t1    = time_year.iloc[0], time_year.iloc[-1]
@@ -144,10 +143,25 @@ def plot_peaks(ax, sir_dict: dict, speed_series: pd.Series,
         if not (t0 <= t_max <= t1):
             continue
 
-        ax.plot(t_max, v_max, color=color, marker='v',
-                markersize=markersize, linestyle='None')
         peak_list.append((t_max, v_max))
 
+    return peak_list
+
+
+def plot_peaks(ax, sir_dict: dict, speed_series: pd.Series,
+               time_all: pd.Series, time_year: pd.Series,
+               icme_mask: np.ndarray, color: str,
+               markersize: int = 15) -> list:
+    """
+    Plot the peak speed marker (▼) for each SIR event that falls within
+    time_year and is not masked as an ICME.
+
+    Returns a list of (timestamp, speed) tuples for each detected peak.
+    """
+    peak_list = get_peaks(sir_dict, speed_series, time_all, time_year, icme_mask)
+    for t_max, v_max in peak_list:
+        ax.plot(t_max, v_max, color=color, marker='v',
+                markersize=markersize, linestyle='None')
     return peak_list
 
 
