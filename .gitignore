@@ -208,3 +208,8 @@ __marimo__/
 
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
+
+# Regenerable full-timeline dataset (207MB, exceeds GitHub's 100MB limit).
+# Exact row-wise union of SR_training_{rising,maximum,declining,minimum}.csv;
+# reconstruct with pd.concat([...]).sort_values('datetime') or rerun scripts/02_prepare_sr_data.py.
+data/processed/SR_training_entire.csv
