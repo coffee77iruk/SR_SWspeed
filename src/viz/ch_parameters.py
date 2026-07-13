@@ -220,6 +220,22 @@ def get_rgba_and_extent(aia_map, wave):
     return rgba, extent
 
 
+def draw_ch_contour(ax, aia_map, poly, extent, color='cyan', linewidths=1.5):
+    """Outline the SPoCA CH union polygon (from get_spoca_ch_union) on an
+    already-imshow'd AIA panel. No-op if poly is None (no CH detected)."""
+    if poly is None:
+        return
+    ny, nx = aia_map.data.shape
+    y_idx, x_idx = np.indices((ny, nx))
+    hpc = aia_map.pixel_to_world(x_idx * u.pixel, y_idx * u.pixel)
+    mask = shapely.contains_xy(poly, hpc.Tx.value, hpc.Ty.value)
+    xmin, xmax, ymin, ymax = extent
+    ax.contour(
+        np.linspace(xmin, xmax, nx), np.linspace(ymin, ymax, ny),
+        mask.astype(int), levels=[0.5], colors=color, linewidths=linewidths, zorder=3,
+    )
+
+
 def set_hpc_axes(ax, extent, show_xlabel=True, show_ylabel=True,
                  label_fs=14, tick_fs=12, grid=True):
     """Apply consistent helioprojective-coordinate axis styling to ax."""
