@@ -9,11 +9,15 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from collections import defaultdict
+from pathlib import Path
 from .cr_data import fetch_cr_table, shift_cr_dates, filter_cr_by_months
 
 # file path
 URL = "https://space.umd.edu/pm/crn/"
-enlil_file_path = "E:/research/SW_Speed_SR/data/wsa_enlil/"
+# Resolved relative to this file (not the caller's cwd), since this data lives
+# under the top-level data/ directory rather than alongside src/.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+enlil_file_path = str(_REPO_ROOT / "data" / "external" / "wsa_enlil")
 
 def load_enlil_df(filepath: str) -> pd.DataFrame:
     start_dt = None
