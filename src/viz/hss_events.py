@@ -25,6 +25,7 @@ from viz.ch_parameters import (
 MODEL_COLORS = {
     "OMNI": "black", "ESWF": "green", "WSA-ENLIL": "deepskyblue",
     "Persistence (27 days)": "orange", "SR-derived formula": "red",
+    "Average prediction (Collin+2025)": "gray",
 }
 
 

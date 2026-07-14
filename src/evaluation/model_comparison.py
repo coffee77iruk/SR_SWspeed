@@ -98,7 +98,16 @@ def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
     else:
         mae = mean_absolute_error(y_true, y_pred)
         rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-        cc = np.corrcoef(y_true, y_pred)[0, 1] if n > 1 else np.nan
+        # A constant y_pred (e.g. the "av" baseline) has zero true variance,
+        # but np.corrcoef's two-pass variance sum can land a few ULPs off
+        # exact zero for large n, silently producing a meaningless ~1e-15
+        # "correlation" instead of the mathematically correct undefined/NaN.
+        # np.ptp involves no summation, so it stays exactly 0 for a constant.
+        constant_pred = n > 1 and np.ptp(y_pred) == 0
+        if n > 1 and not constant_pred:
+            cc = np.corrcoef(y_true, y_pred)[0, 1]
+        else:
+            cc = np.nan
         row = {"MAE": round(mae, 2), "RMSE": round(rmse, 2), "CC": round(cc, 3), "N": n}
     if include_dtw:
         dtw_norm, dtw_raw = _dtw_normalized(y_true, y_pred, window=dtw_window)
@@ -109,7 +118,7 @@ def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
 
 def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                      model_cols=None, test_months=(10, 11, 12),
-                     include_dtw=False, dtw_window=None):
+                     include_dtw=False, dtw_window=None, train_months=range(1, 10)):
     """
     Evaluate MAE/RMSE/CC (optionally DTW) on the Oct-Dec test months, ICME
     periods excluded, for each candidate model column.
@@ -118,12 +127,29 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                "year" -> one row per (year, model), 2010-2024.
                "phase" -> one row per (phase, model); `groups` is a dict of
                           {phase_name: [years]} (defaults to SOLAR_CYCLE_PHASES).
-    model_cols : defaults to every "best*" column plus speed_p27/wsa_enlil/eswf2
-                 that are present in df.
+    model_cols : defaults to every "best*" column plus speed_p27/wsa_enlil/eswf2/av
+                 that are present in df (av is always available -- see below).
+
+    "av" (average-prediction baseline, Collin et al. 2025): a constant equal
+    to the mean OMNI speed over the Jan-Sep training months, ICME periods
+    excluded -- the simplest possible "no information" baseline, included to
+    show that a good RMSE alone doesn't imply real skill (CC for a constant
+    is undefined/near-zero by construction). Not a real df column, since its
+    value depends on which years the current group spans: the single
+    2010-2024 training mean for the entire-period row (group_by=None), that
+    year's own training mean for group_by="year", or that phase's own
+    training mean for group_by="phase" -- each row uses only the training
+    data from its own group's years, so a per-phase row doesn't leak
+    information a single global constant wouldn't have.
     """
     df = df.copy()
     df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
     df = df.dropna(subset=["datetime"])
+
+    train_df = df[df["datetime"].dt.month.isin(train_months)]
+    if "is_ICME" in train_df.columns:
+        train_df = train_df[~train_df["is_ICME"]]
+
     df = df[df["datetime"].dt.month.isin(test_months)]
     if "is_ICME" in df.columns:
         df = df[~df["is_ICME"]]
@@ -131,27 +157,39 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
     if model_cols is None:
         model_cols = [c for c in df.columns if c.startswith("best")]
         model_cols += [c for c in ["speed_p27", "wsa_enlil", "eswf2"] if c in df.columns]
+        model_cols += ["av"]
+
+    use_av = "av" in model_cols
+    real_model_cols = [c for c in model_cols if c != "av"]
 
     if group_by == "year":
         years = sorted(df["datetime"].dt.year.unique())
-        group_iter = [(y, df[df["datetime"].dt.year == y]) for y in years]
+        group_iter = [(y, df[df["datetime"].dt.year == y], [y]) for y in years]
         group_col = "year"
     elif group_by == "phase":
         groups = groups or SOLAR_CYCLE_PHASES
-        group_iter = [(name, df[df["datetime"].dt.year.isin(yrs)]) for name, yrs in groups.items()]
+        group_iter = [(name, df[df["datetime"].dt.year.isin(yrs)], yrs) for name, yrs in groups.items()]
         group_col = "phase"
     else:
-        group_iter = [(None, df)]
+        group_iter = [(None, df, sorted(df["datetime"].dt.year.unique()))]
         group_col = None
 
     rows = []
-    for group_val, sub_df in group_iter:
-        sub_df = sub_df[[target_col] + model_cols].dropna()
-        for model in model_cols:
-            row = _row_metrics(
-                sub_df[target_col].values, sub_df[model].values,
-                include_dtw=include_dtw, dtw_window=dtw_window,
-            )
+    for group_val, sub_df, group_years in group_iter:
+        sub_df = sub_df.copy()
+        cols = list(real_model_cols)
+        if use_av:
+            av_const = train_df.loc[train_df["datetime"].dt.year.isin(group_years), target_col].mean()
+            sub_df["av"] = av_const
+            cols = cols + ["av"]
+
+        sub_df = sub_df[[target_col] + cols].dropna()
+        for model in cols:
+            with np.errstate(invalid="ignore"):
+                row = _row_metrics(
+                    sub_df[target_col].values, sub_df[model].values,
+                    include_dtw=include_dtw, dtw_window=dtw_window,
+                )
             row["model"] = model
             if group_col:
                 row[group_col] = group_val

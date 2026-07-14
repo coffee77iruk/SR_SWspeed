@@ -30,6 +30,7 @@ MODEL_STYLES = {
     "wsa_enlil": {"label": "WSA-ENLIL", "color": "deepskyblue"},
     "eswf2":     {"label": "ESWF", "color": "green"},
     "best_sr":   {"label": "SR-derived formula", "color": "red"},
+    "av":        {"label": "Average prediction (Collin+2025)", "color": "gray"},
 }
 
 
