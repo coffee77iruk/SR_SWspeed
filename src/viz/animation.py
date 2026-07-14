@@ -257,6 +257,163 @@ def save_cr_animation_frames(df, cr_df, cr_pair, icme_intervals, series_specs, m
     return saved
 
 
+def build_cr_combined_figure(df, cr_df, cr_pair, icme_intervals, series_specs,
+                             sr_col="best_sr", propagation_delay_days=4):
+    """
+    Build the static parts of the "combined" single-window animation layout:
+    one AIA panel on the left, the speed-profile panel on the right (no
+    27-days-prior comparison panel) -- distinct from build_cr_animation_figure(),
+    which is meant for a narrow highlighted sub-window with a prev/now pair.
+    This layout sweeps frame-by-frame across the *entire* cr_pair span.
+
+    Returns (fig, ax_aia, ax_speed, state).
+    """
+    time_all = df["datetime"]
+    icme_mask = make_icme_mask(time_all, icme_intervals)
+
+    t_starts, t_ends = zip(*[get_cr_date_range(cr_df, cr) for cr in cr_pair])
+    t_plot_start, t_plot_end = min(t_starts), max(t_ends)
+    cr_df_plot = df[(time_all >= t_plot_start) & (time_all < t_plot_end)]
+
+    fig = plt.figure(figsize=(44, 8), facecolor="none")
+    gs = gridspec.GridSpec(1, 2, width_ratios=[1, 2.5], wspace=0.0,
+                           top=0.82, bottom=0.10, left=0.05, right=0.99)
+    ax_aia = fig.add_subplot(gs[0, 0])
+    ax_speed = fig.add_subplot(gs[0, 1])
+
+    ax_aia.set_facecolor("black")
+    ax_speed.set_facecolor("white")
+
+    shade_icme(ax_speed, icme_intervals, t_plot_start, t_plot_end)
+    ax_speed.axvline(t_ends[0], color="gray", linestyle=":", linewidth=2, alpha=0.8)
+    for cr_num, t_s in zip(cr_pair, t_starts):
+        ax_speed.text(t_s + timedelta(hours=6), 868, f"CR {cr_num}", ha="left", va="top",
+                     fontsize=34, color="gray")
+
+    ax_speed.plot(cr_df_plot["datetime"], cr_df_plot["speed"], color=MODEL_COLORS["OMNI"], lw=3, label="OMNI")
+    omni_sir_dict = detect_HSE_blocks(time_all, df["speed"])
+    plot_peaks(ax_speed, omni_sir_dict, df["speed"], time_all, cr_df_plot["datetime"], icme_mask,
+              color=MODEL_COLORS["OMNI"], markersize=12)
+
+    for colname, label in series_specs:
+        color = MODEL_COLORS.get(label, "gray")
+        ls, lw = ("-", 3) if "SR" in label else ("--", 2)
+        alpha = 0.25 if colname == sr_col else 1.0
+        ax_speed.plot(cr_df_plot["datetime"], cr_df_plot[colname], color=color, lw=lw,
+                     linestyle=ls, label=label, alpha=alpha)
+        sir_dict = detect_HSE_blocks(time_all, df[colname])
+        plot_peaks(ax_speed, sir_dict, df[colname], time_all, cr_df_plot["datetime"], icme_mask,
+                  color=color, markersize=12)
+
+    sr_left_line, = ax_speed.plot([], [], color="red", lw=2.5, linestyle="-", zorder=8)
+
+    ax_speed.set_xlim(t_plot_start, t_plot_end)
+    ax_speed.set_ylim(250, 900)
+    ax_speed.set_yticks([400, 600, 800])
+    ax_speed.tick_params(axis="y", labelsize=32)
+    ax_speed.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+    ax_speed.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+    ax_speed.tick_params(axis="x", labelsize=32)
+    ax_speed.set_ylabel("Speed [km/s]", fontsize=34, labelpad=10)
+    ax_speed.set_xlabel("Date", fontsize=34, labelpad=8)
+    ax_speed.margins(x=0.005)
+    ax_speed.set_title(
+        f"CR {cr_pair[0]}-{cr_pair[1]}  ({t_plot_start.strftime('%Y %b %d')} - {t_plot_end.strftime('%Y %b %d')})",
+        fontsize=34, pad=8)
+
+    handles, labels = ax_speed.get_legend_handles_labels()
+    leg = ax_speed.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 1.28),
+                          ncol=len(labels), fontsize=34, frameon=False)
+    for handle, label in zip(leg.legend_handles, labels):
+        if "SR" in label:
+            handle.set_alpha(1.0)
+
+    vline_now = ax_speed.axvline(mdates.date2num(t_plot_start), color="blue", lw=6.0,
+                                 ls="-", zorder=10, alpha=0.95)
+
+    state = dict(cr_df_plot=cr_df_plot, sr_left_line=sr_left_line, vline_now=vline_now,
+                dot=None, band=None, arrow=None, text=None, sr_col=sr_col,
+                propagation_delay=timedelta(days=propagation_delay_days))
+    return fig, ax_aia, ax_speed, state
+
+
+def update_cr_combined_frame(df, fig, ax_aia, ax_speed, state, dt_now, f_now):
+    """Update one frame of the "combined" layout: reload the single AIA panel
+    and advance the speed panel's vline/dot/arrow/band -- same speed-panel
+    logic as update_cr_animation_frame(), but only one AIA image per frame."""
+    wave_now, aia_now = load_and_calibrate(f_now)
+    poly_now = get_spoca_ch_union(aia_now, hours=1)
+    rgba_now, ext_now = get_rgba_and_extent(aia_now, wave_now)
+
+    ax_aia.cla()
+    ax_aia.set_facecolor("black")
+    ax_aia.imshow(rgba_now, origin="lower", extent=ext_now)
+    draw_ch_contour(ax_aia, aia_now, poly_now, ext_now)
+    set_hpc_axes(ax_aia, ext_now, show_xlabel=True, show_ylabel=True, label_fs=26, tick_fs=24)
+    for spine in ax_aia.spines.values():
+        spine.set_edgecolor("blue")
+        spine.set_linewidth(7)
+    ax_aia.set_title(f"SDO/AIA 193 A\n{dt_now.strftime('%Y %b %d  %H:%M UT')}", fontsize=26, pad=8)
+
+    dt_now_num = mdates.date2num(pd.Timestamp(dt_now))
+    state["vline_now"].set_xdata([dt_now_num, dt_now_num])
+
+    for key in ("dot", "arrow", "text"):
+        if state[key] is not None:
+            state[key].remove()
+            state[key] = None
+
+    t_arr = pd.Timestamp(dt_now) + state["propagation_delay"]
+    cr_df_plot = state["cr_df_plot"]
+    idx_arr = (df["datetime"] - t_arr).abs().idxmin()
+    sr_val = df.loc[idx_arr, state["sr_col"]]
+
+    if pd.notna(sr_val):
+        state["dot"], = ax_speed.plot(t_arr, sr_val, marker="o", color="red", markersize=14, zorder=15,
+                                      linestyle="None", markeredgecolor="darkred", markeredgewidth=1.5)
+        state["arrow"] = ax_speed.annotate(
+            "", xy=(t_arr, sr_val), xytext=(dt_now, sr_val),
+            arrowprops=dict(arrowstyle="-|>", color="blue", lw=4.0, mutation_scale=16), zorder=14)
+        days = state["propagation_delay"].days
+        state["text"] = ax_speed.text(t_arr - state["propagation_delay"] / 2, sr_val + 15, f"+{days} days",
+                                      ha="center", va="bottom", fontsize=16, color="blue",
+                                      fontweight="bold", zorder=16)
+
+    mask_left = cr_df_plot["datetime"] <= t_arr
+    left = cr_df_plot.loc[mask_left]
+    state["sr_left_line"].set_data(left["datetime"], left[state["sr_col"]])
+
+    if state["band"] is not None:
+        state["band"].remove()
+        state["band"] = None
+    if not left.empty and {"max_sqrt_AP", "min_sqrt_AP"}.issubset(df.columns):
+        state["band"] = ax_speed.fill_between(
+            left["datetime"], left[state["sr_col"]] - df.loc[left.index, "min_sqrt_AP"],
+            left[state["sr_col"]] + df.loc[left.index, "max_sqrt_AP"], color="red", alpha=0.2, zorder=5)
+
+
+def save_cr_combined_frames(df, cr_df, cr_pair, icme_intervals, series_specs, files,
+                            output_dir, sr_col="best_sr", propagation_delay_days=4, dpi=150):
+    """Render+save one PNG per (dt, path) in files (see collect_files()) using
+    the single-AIA-panel "combined" layout. Returns the number of frames saved."""
+    os.makedirs(output_dir, exist_ok=True)
+    fig, ax_aia, ax_speed, state = build_cr_combined_figure(
+        df, cr_df, cr_pair, icme_intervals, series_specs, sr_col, propagation_delay_days)
+
+    saved = 0
+    for i, (dt_now, f_now) in enumerate(files):
+        try:
+            update_cr_combined_frame(df, fig, ax_aia, ax_speed, state, dt_now, f_now)
+            fig.savefig(os.path.join(output_dir, f"frame_{i:04d}.png"), dpi=dpi,
+                       facecolor="none", bbox_inches="tight")
+            saved += 1
+        except Exception as e:
+            print(f"  [{i + 1}/{len(files)}] skipped -- {e}")
+
+    plt.close(fig)
+    return saved
+
+
 def _write_concat_list(frame_dir, fps):
     """Write an ffmpeg concat-demuxer list with explicit per-frame durations,
     covering whichever frame_*.png files actually exist (save_cr_animation_frames
