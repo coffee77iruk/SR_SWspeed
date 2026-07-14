@@ -119,6 +119,11 @@ def build_cr_animation_figure(df, cr_df, cr_pair, icme_intervals, series_specs,
         ax_speed.text(t_s + timedelta(hours=6), 868, f"CR {cr_num}", ha="left", va="top",
                      fontsize=30, color="gray")
 
+    ax_speed.plot(cr_df_plot["datetime"], cr_df_plot["speed"], color=MODEL_COLORS["OMNI"], lw=3, label="OMNI")
+    omni_sir_dict = detect_HSE_blocks(time_all, df["speed"])
+    plot_peaks(ax_speed, omni_sir_dict, df["speed"], time_all, cr_df_plot["datetime"], icme_mask,
+              color=MODEL_COLORS["OMNI"], markersize=12)
+
     for colname, label in series_specs:
         color = MODEL_COLORS.get(label, "gray")
         ls, lw = ("-", 3) if "SR" in label else ("--", 2)
@@ -153,11 +158,15 @@ def build_cr_animation_figure(df, cr_df, cr_pair, icme_intervals, series_specs,
         f"CR {cr_pair[0]}-{cr_pair[1]}  ({t_plot_start.strftime('%Y %b %d')} - {t_plot_end.strftime('%Y %b %d')})",
         fontsize=30, pad=10)
 
+    vline_now = ax_speed.axvline(mdates.date2num(t_plot_start), color="blue", lw=5,
+                                 ls="-", zorder=10, alpha=0.95)
+
     for ax in (ax_prev, ax_now):
         ax.set_facecolor("black")
 
-    state = dict(cr_df_plot=cr_df_plot, sr_left_line=sr_left_line, dot=None, band=None,
-                arrow=None, text=None, sr_col=sr_col, propagation_delay=timedelta(days=propagation_delay_days))
+    state = dict(cr_df_plot=cr_df_plot, sr_left_line=sr_left_line, vline_now=vline_now,
+                dot=None, band=None, arrow=None, text=None, sr_col=sr_col,
+                propagation_delay=timedelta(days=propagation_delay_days))
     return fig, ax_speed, ax_prev, ax_now, state
 
 
@@ -188,6 +197,9 @@ def update_cr_animation_frame(df, fig, ax_speed, ax_prev, ax_now, state, dt_now,
 
     ax_prev.set_title(f"{dt_prev.strftime('%Y %b %d %H:%M UT')}  (27 days before)", fontsize=30, pad=12)
     ax_now.set_title(dt_now.strftime("%Y %b %d %H:%M UT"), fontsize=30, color="blue", pad=12)
+
+    dt_now_num = mdates.date2num(pd.Timestamp(dt_now))
+    state["vline_now"].set_xdata([dt_now_num, dt_now_num])
 
     for key in ("dot", "arrow", "text"):
         if state[key] is not None:
