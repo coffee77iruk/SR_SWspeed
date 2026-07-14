@@ -223,3 +223,8 @@ data/processed/CH_param_df.csv
 # unlike outputs/<run_id>/ PySR artifacts, trivially regenerable in seconds.
 outputs/ensemble/
 outputs/corotation/
+
+# Working/exploratory notebooks kept local-only (not ready for the public repo).
+figures/make_figures.ipynb
+figures/gif/make_gif.ipynb
+notebooks/supplementary/
