@@ -93,8 +93,8 @@ def PySR(output_directory=None, run_id=None, loss="huber"):
         ncycles_per_iteration=500,
         batching=False,
 
-        maxsize=15,
-        maxdepth=5,
+        maxsize=20,
+        maxdepth=4,
         niterations=5000,
 
         binary_operators=["+", "-", "*", "/", "^"],
