@@ -24,7 +24,7 @@ from sunpy.net import hek
 import sunpy.map
 
 import shapely
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
 from shapely.ops import unary_union
 from scipy.ndimage import binary_dilation
 
@@ -300,3 +300,70 @@ def plot_P_panel(ax, rgba_data, extent, xs_pix, ys_pix, aia_map, P_val, L, wave,
         ax.set_title(rf"$P_{{CH{{{L}}},{{{wave}}}\,\mathrm{{Å}}}}={P_val:.1f}$", fontsize=title_fs)
     else:
         ax.set_title(rf"$P_{{CH{{{L}}},{{{wave}}}\,\mathrm{{Å}}}}=\mathrm{{NaN}}$", fontsize=title_fs)
+
+
+def _extract_polygons(geom):
+    """Flatten a Polygon/MultiPolygon/GeometryCollection (e.g. a unary_union
+    result) into a flat list of Polygons."""
+    if geom is None or geom.is_empty:
+        return []
+    if isinstance(geom, Polygon):
+        return [geom]
+    if isinstance(geom, MultiPolygon):
+        return list(geom.geoms)
+    if isinstance(geom, GeometryCollection):
+        return [g for g in geom.geoms if isinstance(g, Polygon) and not g.is_empty]
+    try:
+        return [g for g in geom.geoms if isinstance(g, Polygon) and not g.is_empty]
+    except AttributeError:
+        return []
+
+
+def get_ch_centroids(aia_map, merged_poly, lat_max_deg=65.0, lon_limit_deg=20.0):
+    """
+    For a (possibly multi-polygon) merged CH union, compute each independent
+    polygon's centroid in Heliographic Stonyhurst lon/lat, and pick the
+    highest-latitude one within |lat| < lat_max_deg and |lon| <= lon_limit_deg
+    -- used to identify "the" tracked CH among several candidates near disk
+    center (e.g. for a long-lived-CH case study).
+
+    Returns a dict with:
+      polygons          : list of independent shapely Polygons
+      centroids_hpc      : list of (Tx_arcsec, Ty_arcsec)
+      centroid_lons/lats : list of HGS lon/lat in degrees
+      selected_mask       : bool list, True where within the lat/lon filter
+      selected_idx        : index of the highest-latitude candidate passing
+                            the filter, or None if none pass
+      selected_max_lat     : that candidate's latitude, or NaN
+    """
+    polys = _extract_polygons(merged_poly)
+    if not polys:
+        return dict(polygons=[], centroids_hpc=[], centroid_lons=[], centroid_lats=[],
+                    selected_mask=[], selected_idx=None, selected_max_lat=np.nan)
+
+    hpc_frame = aia_map.coordinate_frame
+    centroids_hpc, centroid_lons, centroid_lats = [], [], []
+
+    for p in polys:
+        c = p.centroid
+        tx, ty = float(c.x), float(c.y)
+        sc_hgs = SkyCoord(tx * u.arcsec, ty * u.arcsec, frame=hpc_frame).transform_to(frames.HeliographicStonyhurst)
+        lon = ((sc_hgs.lon.to(u.deg).value + 180.0) % 360.0) - 180.0
+        lat = sc_hgs.lat.to(u.deg).value
+        centroids_hpc.append((tx, ty))
+        centroid_lons.append(lon)
+        centroid_lats.append(lat)
+
+    selected_mask = [(lat < lat_max_deg) and (abs(lon) <= lon_limit_deg)
+                     for lon, lat in zip(centroid_lons, centroid_lats)]
+    candidates = [k for k, ok in enumerate(selected_mask) if ok]
+
+    if candidates:
+        selected_idx = max(candidates, key=lambda k: centroid_lats[k])
+        selected_max_lat = centroid_lats[selected_idx]
+    else:
+        selected_idx, selected_max_lat = None, np.nan
+
+    return dict(polygons=polys, centroids_hpc=centroids_hpc, centroid_lons=centroid_lons,
+               centroid_lats=centroid_lats, selected_mask=selected_mask,
+               selected_idx=selected_idx, selected_max_lat=selected_max_lat)
