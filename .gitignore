@@ -213,3 +213,7 @@ __marimo__/
 # Exact row-wise union of SR_training_{rising,maximum,declining,minimum}.csv;
 # reconstruct with pd.concat([...]).sort_values('datetime') or rerun scripts/02_prepare_sr_data.py.
 data/processed/SR_training_entire.csv
+
+# Superseded intermediate artifact -- nothing in notebooks/ or scripts/ reads this;
+# regenerate locally with scripts/make_ch_param_df.py if needed.
+data/processed/CH_param_df.csv
