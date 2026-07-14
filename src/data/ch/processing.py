@@ -25,12 +25,15 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
 # A_CH parameter
-def get_A_CH(aia_map, lon=7.5, lat_limits = [30, 60, 90]):
+def get_A_CH(aia_map, lon_limits=[7.5], lat_limits=[30, 60, 90]):
     """
-    Read the given sunpy.map.Map variable, search for CH events using HEK, 
-    and calculate A_CH using the number of internal pixels and the ±7.5° slice region.
+    Read the given sunpy.map.Map variable, search for CH events using HEK,
+    and calculate A_CH using the number of internal pixels within each
+    central meridional region (±lon, ±lat).
 
-    Return: (aia_map.date, A_CH)
+    Return: (aia_map.date, A_CH) where A_CH is a flat list ordered lon-major,
+    lat-minor: [lon_limits[0]xlat_limits[0], lon_limits[0]xlat_limits[1], ...,
+    lon_limits[1]xlat_limits[0], ...].
     """
 
     hek_client = hek.HEKClient()
@@ -74,117 +77,123 @@ def get_A_CH(aia_map, lon=7.5, lat_limits = [30, 60, 90]):
     lon_deg = hgs_coords.lon.to(u.deg).value
     lat_deg = hgs_coords.lat.to(u.deg).value
 
-    central_lon_mask = (np.abs(lon_deg) <= lon)              # mask of longitudinal slice
     ch_mask = shapely.contains_xy(merged, x_world, y_world) # mask of coronal hole area
 
     A_CH = []
 
-    for lat_limit in lat_limits:
-        central_lat_mask = np.abs(lat_deg) <= lat_limit  # mask of latitudinal slice
-        central_mask = central_lon_mask & central_lat_mask # mask of central merdional slice
+    for lon in lon_limits:
+        central_lon_mask = (np.abs(lon_deg) <= lon)  # mask of longitudinal slice
 
-        inside_slice = central_mask.sum()                    # count of meridional slice pixels
-        inside_ch_in_slice = (ch_mask & central_mask).sum()  # count of overlap pixels
+        for lat_limit in lat_limits:
+            central_lat_mask = np.abs(lat_deg) <= lat_limit  # mask of latitudinal slice
+            central_mask = central_lon_mask & central_lat_mask # mask of central merdional slice
 
-        A_CH.append(inside_ch_in_slice / inside_slice if inside_slice > 0 else 0.0)
+            inside_slice = central_mask.sum()                    # count of meridional slice pixels
+            inside_ch_in_slice = (ch_mask & central_mask).sum()  # count of overlap pixels
+
+            A_CH.append(inside_ch_in_slice / inside_slice if inside_slice > 0 else 0.0)
 
     return aia_map.date, *A_CH
 
 
 # P_CH parameter
-def get_P_CH(aia_map, lon=10, lat_limits = [30, 60, 90]):
+def get_P_CH(aia_map, lon_limits=[10], lat_limits=[30, 60, 90]):
     """
     Read the given sunpy.map.Map variable,
-    and calculate the sum of the reciprocals of all pixel values within the selected region.
-    
-    Return: (aia_map.date, P_CH)
+    and calculate the sum of the reciprocals of all pixel values within each
+    central meridional region (±lon, ±lat).
+
+    Return: (aia_map.date, P_CH) where P_CH is a flat list ordered lon-major,
+    lat-minor (same convention as get_A_CH).
     """
 
     P_CH = []
 
     ny, nx = aia_map.data.shape
-    n_lon = int(4 * lon + 1)
-    lon_vals = np.linspace(-lon, lon, n_lon) * u.deg
 
-    for lat in lat_limits:
-        n_lat = int(4 * lat + 1)
-        lat_vals = np.linspace(-lat, lat, n_lat) * u.deg
+    for lon in lon_limits:
+        n_lon = int(4 * lon + 1)
+        lon_vals = np.linspace(-lon, lon, n_lon) * u.deg
 
-        # upper_boundary: latitude +30 degree
-        upper_boundary_hgs = SkyCoord(lon=lon_vals,
-                                    lat=lat*u.deg,
-                                    frame=frames.HeliographicStonyhurst,
-                                    obstime=aia_map.date,
-                                    observer='earth')
+        for lat in lat_limits:
+            n_lat = int(4 * lat + 1)
+            lat_vals = np.linspace(-lat, lat, n_lat) * u.deg
 
-        # lower_boundary: latitude -30 degree
-        lower_boundary_hgs = SkyCoord(lon=lon_vals,
-                                    lat=-lat*u.deg,
-                                    frame=frames.HeliographicStonyhurst,
-                                    obstime=aia_map.date,
-                                    observer='earth')
-        
-        # left_boundary: longitude -10 degree
-        left_boundary_hgs = SkyCoord(lon=-lon*u.deg,
-                                    lat=lat_vals,
-                                    frame=frames.HeliographicStonyhurst,
-                                    obstime=aia_map.date,
-                                    observer='earth')
+            # upper_boundary: latitude +lat degree
+            upper_boundary_hgs = SkyCoord(lon=lon_vals,
+                                        lat=lat*u.deg,
+                                        frame=frames.HeliographicStonyhurst,
+                                        obstime=aia_map.date,
+                                        observer='earth')
 
-        # right_boundary: longitude +10 degree
-        right_boundary_hgs = SkyCoord(lon=lon*u.deg,
-                                    lat=lat_vals,
-                                    frame=frames.HeliographicStonyhurst,
-                                    obstime=aia_map.date,
-                                    observer='earth')
+            # lower_boundary: latitude -lat degree
+            lower_boundary_hgs = SkyCoord(lon=lon_vals,
+                                        lat=-lat*u.deg,
+                                        frame=frames.HeliographicStonyhurst,
+                                        obstime=aia_map.date,
+                                        observer='earth')
 
-        upper_boundary_hpc = upper_boundary_hgs.transform_to(aia_map.coordinate_frame)
-        lower_boundary_hpc = lower_boundary_hgs.transform_to(aia_map.coordinate_frame)
-        left_boundary_hpc = left_boundary_hgs.transform_to(aia_map.coordinate_frame)
-        right_boundary_hpc = right_boundary_hgs.transform_to(aia_map.coordinate_frame)
+            # left_boundary: longitude -lon degree
+            left_boundary_hgs = SkyCoord(lon=-lon*u.deg,
+                                        lat=lat_vals,
+                                        frame=frames.HeliographicStonyhurst,
+                                        obstime=aia_map.date,
+                                        observer='earth')
 
-        upper_pix = aia_map.world_to_pixel(upper_boundary_hpc)
-        lower_pix = aia_map.world_to_pixel(lower_boundary_hpc)
-        left_pix = aia_map.world_to_pixel(left_boundary_hpc)
-        right_pix = aia_map.world_to_pixel(right_boundary_hpc)
+            # right_boundary: longitude +lon degree
+            right_boundary_hgs = SkyCoord(lon=lon*u.deg,
+                                        lat=lat_vals,
+                                        frame=frames.HeliographicStonyhurst,
+                                        obstime=aia_map.date,
+                                        observer='earth')
 
-        xs = np.concatenate([
-            np.array(lower_pix.x),
-            np.array(right_pix.x),
-            np.array(upper_pix.x)[::-1],
-            np.array(left_pix.x)[::-1],
-        ])
+            upper_boundary_hpc = upper_boundary_hgs.transform_to(aia_map.coordinate_frame)
+            lower_boundary_hpc = lower_boundary_hgs.transform_to(aia_map.coordinate_frame)
+            left_boundary_hpc = left_boundary_hgs.transform_to(aia_map.coordinate_frame)
+            right_boundary_hpc = right_boundary_hgs.transform_to(aia_map.coordinate_frame)
 
-        ys = np.concatenate([
-            np.array(lower_pix.y),
-            np.array(right_pix.y),
-            np.array(upper_pix.y)[::-1],
-            np.array(left_pix.y)[::-1],
-        ])
+            upper_pix = aia_map.world_to_pixel(upper_boundary_hpc)
+            lower_pix = aia_map.world_to_pixel(lower_boundary_hpc)
+            left_pix = aia_map.world_to_pixel(left_boundary_hpc)
+            right_pix = aia_map.world_to_pixel(right_boundary_hpc)
 
-        vertices = np.vstack((xs, ys)).T   # shape (N_vertices, 2)
-        poly = Path(vertices)           
+            xs = np.concatenate([
+                np.array(lower_pix.x),
+                np.array(right_pix.x),
+                np.array(upper_pix.x)[::-1],
+                np.array(left_pix.x)[::-1],
+            ])
 
-        x0 = max(int(np.floor(xs.min())), 0)
-        x1 = min(int(np.ceil (xs.max())) + 1, nx)
-        y0 = max(int(np.floor(ys.min())), 0)
-        y1 = min(int(np.ceil (ys.max())) + 1, ny)
+            ys = np.concatenate([
+                np.array(lower_pix.y),
+                np.array(right_pix.y),
+                np.array(upper_pix.y)[::-1],
+                np.array(left_pix.y)[::-1],
+            ])
 
-        Xb, Yb = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
-        points = np.vstack((Xb.ravel(), Yb.ravel())).T
-        mask_bb = poly.contains_points(points)
+            vertices = np.vstack((xs, ys)).T   # shape (N_vertices, 2)
+            poly = Path(vertices)
 
-        data_bb = aia_map.data[y0:y1, x0:x1].ravel()
-        valid = mask_bb & (data_bb != 0)
+            x0 = max(int(np.floor(xs.min())), 0)
+            x1 = min(int(np.ceil (xs.max())) + 1, nx)
+            y0 = max(int(np.floor(ys.min())), 0)
+            y1 = min(int(np.ceil (ys.max())) + 1, ny)
 
-        b = data_bb[valid]
+            Xb, Yb = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
+            points = np.vstack((Xb.ravel(), Yb.ravel())).T
+            mask_bb = poly.contains_points(points)
 
-        # 5% of the highest and lowest values are excluded.
-        lower = np.percentile(b, 5)
-        upper = np.percentile(b, 95)
-        mask = (b >= lower) & (b <= upper)
-        b_filtered = b[mask]
+            data_bb = aia_map.data[y0:y1, x0:x1].ravel()
+            valid = mask_bb & (data_bb != 0)
 
-        P_CH.append(np.sum(np.reciprocal(b_filtered)))
+            b = data_bb[valid]
+
+            # 5% of the highest and lowest values are excluded.
+            lower = np.percentile(b, 5)
+            upper = np.percentile(b, 95)
+            mask = (b >= lower) & (b <= upper)
+            b_filtered = b[mask]
+
+            P_CH.append(np.sum(np.reciprocal(b_filtered)))
 
     return aia_map.date, *P_CH
