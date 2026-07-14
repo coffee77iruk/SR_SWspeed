@@ -1,7 +1,7 @@
 """
-Shared loader for the OMNI/ESWF/WSA-ENLIL benchmark comparison used by the
-notebooks/supplementary/ensemble_model/ speed-profile figures. Kept separate
-from formula.py since it pulls in the repo's benchmark data modules (external
+Shared loader for the OMNI/ESWF/WSA-ENLIL benchmark comparison used by
+local-only supplementary speed-profile figures. Kept separate from
+formula.py since it pulls in the repo's benchmark data modules (external
 local files + a network fetch for the WSA-ENLIL Carrington-rotation table).
 """
 

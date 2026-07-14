@@ -14,14 +14,14 @@ recent Earth observation may be more than one rotation stale, so the "fresh"
 instead of assuming perfect persistence (alpha=0, beta=1), to project a stale
 observation forward by one Carrington rotation.
 
-Step A (this module + notebooks/supplementary/corotation_1au/01_regression_self_consistency.ipynb)
-only validated this on Earth's own data (no Carrington-longitude/time mapping).
+Step A (this module, validated in a local-only supplementary notebook) only
+validated this on Earth's own data (no Carrington-longitude/time mapping).
 Regression correction turned out worse than naive persistence (regression-to-
 -the-mean attenuation).
 
-Step B (the longitude-mapping functions below +
-notebooks/supplementary/corotation_1au/02_longitude_reconstruction_map.ipynb) builds an
-actual Carrington-longitude x time reconstruction: Earth's own historical
+Step B (the longitude-mapping functions below, applied in a local-only
+supplementary notebook) builds an actual Carrington-longitude x time
+reconstruction: Earth's own historical
 hourly series, reindexed by which Carrington longitude Earth was facing at
 each observation time, so "value at longitude L, time t" can be looked up as
 "the value Earth observed the last time it faced longitude L at/near t" -
