@@ -1,11 +1,25 @@
 from pysr import PySRRegressor
 
+# Paper's loss: plain Huber, threshold=100 (LossFunctions.jl built-in via
+# PySRRegressor's elementwise_loss -- no custom Julia needed).
+HUBER_THRESHOLD = 100.0
+
+ELEMENTWISE_LOSSES = {
+    "huber": f"HuberLoss({HUBER_THRESHOLD})",
+    "l2":    "L2DistLoss()",
+    "l1":    "L1DistLoss()",
+}
+
 """Hyper parameters in the loss function"""
 # DELTA      = 5.0
 # GAMMA      = 10.0
 # GRAD_SCALE = 10.0
 # w          = 3
 
+# Kept for reference / future use -- not the current loss (see PySR()'s
+# default loss="huber", matching the paper). Adds HSS-event-weighted
+# asymmetric-bias and gradient-mismatch terms on top of a Huber base, using
+# 03_run_sr_model.py's make_weights() per-sample alpha (dataset.weights).
 CUSTOM_LOSS = """
 function my_loss(tree, dataset::Dataset{T, L}, options)::L where {T, L}
     prediction, flag = eval_tree_array(tree, dataset.X, options)
@@ -61,7 +75,19 @@ function my_loss(tree, dataset::Dataset{T, L}, options)::L where {T, L}
 end
 """
 
-def PySR(output_directory=None, run_id=None):
+def PySR(output_directory=None, run_id=None, loss="huber"):
+    """
+    loss : "huber" (default -- matches the paper: Huber loss, threshold=100),
+           "l2", "l1", or "custom" (CUSTOM_LOSS above -- HSS-event-weighted,
+           not the paper's actual loss).
+    """
+    if loss == "custom":
+        loss_kwargs = dict(loss_function=CUSTOM_LOSS)
+    elif loss in ELEMENTWISE_LOSSES:
+        loss_kwargs = dict(elementwise_loss=ELEMENTWISE_LOSSES[loss])
+    else:
+        raise ValueError(f"Unknown loss {loss!r}; choose from 'custom', {list(ELEMENTWISE_LOSSES)}")
+
     model = PySRRegressor(
         population_size=100,
         ncycles_per_iteration=500,
@@ -79,7 +105,7 @@ def PySR(output_directory=None, run_id=None):
         optimize_probability=0.2,
         should_optimize_constants=True,
 
-        loss_function=CUSTOM_LOSS, 
+        **loss_kwargs,
 
         turbo=True,
 
