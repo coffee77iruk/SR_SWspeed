@@ -29,7 +29,7 @@ MODEL_COLORS = {
 }
 
 
-def _shade_event_windows(ax, omni_peaks, time_window_hr=24, speed_window=100,
+def _shade_event_windows(ax, omni_peaks, time_window_hr=24, speed_window=200,
                          facecolor="cyan", alpha=0.2, edgecolor="cyan", lw=1.5):
     """Rectangle around each OMNI peak showing the time x speed acceptance
     window used by match_peaks_with_window()."""
@@ -48,7 +48,7 @@ def _shade_event_windows(ax, omni_peaks, time_window_hr=24, speed_window=100,
 def plot_speed_profile_by_year(df, series_specs, icme_intervals, years=range(2010, 2025),
                                test_months=(10, 11, 12), time_col="datetime",
                                show_event_windows=False, event_time_window_hr=24,
-                               event_speed_window=100, save_path=None):
+                               event_speed_window=200, save_path=None):
     """
     One row per year, Oct-Dec speed profile for every (colname, label) in
     series_specs plus the observed "OMNI" series, with ICME shading, detected
