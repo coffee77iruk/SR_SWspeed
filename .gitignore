@@ -217,3 +217,9 @@ data/processed/SR_training_entire.csv
 # Superseded intermediate artifact -- nothing in notebooks/ or scripts/ reads this;
 # regenerate locally with scripts/make_ch_param_df.py if needed.
 data/processed/CH_param_df.csv
+
+# Redundant with the figures already embedded inline in the notebooks that
+# write them (notebooks/supplementary/ensemble_model/, corotation_1au/) --
+# unlike outputs/<run_id>/ PySR artifacts, trivially regenerable in seconds.
+outputs/ensemble/
+outputs/corotation/
