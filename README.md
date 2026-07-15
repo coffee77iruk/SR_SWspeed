@@ -32,10 +32,10 @@ Entire test period (2010–2024, Oct–Dec months, ICME periods excluded):
 
 | Model | MAE [km/s] | RMSE [km/s] | CC | DTW [km/s] |
 |---|---|---|---|---|
-| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **47.1** |
-| 27-day persistence | 70.9 | 96.2 | 0.46 | 54.3 |
-| ESWF | 82.3 | 108.9 | 0.38 | 66.6 |
-| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 81.7 |
+| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **34.8** |
+| 27-day persistence | 70.9 | 96.2 | 0.46 | 39.1 |
+| ESWF | 82.3 | 108.9 | 0.38 | 47.1 |
+| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 65.8 |
 
 DTW (Dynamic Time Warping distance, Samara et al. 2022; Edward-Inatimi et al. 2026;
 reported here as cost-per-matched-pair -- total cost divided by the warping

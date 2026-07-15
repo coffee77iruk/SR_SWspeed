@@ -18,6 +18,16 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from utils.ch_processing import preprocess_ch_df, load_omni_data, build_sr_df
 from utils.icme import fetch_icme_events, mask_icme_events
+
+# AIA excludes every 21:00 UT frame daily (dark-frame calibration), which
+# lands as a structural, guaranteed 1-hour gap (20:00 -> 22:00) in the
+# best_sr timeline too (the 96h/4-day CH lag preserves hour-of-day). Confirmed
+# empirically: of 1380 gaps in the entire-period test-month, ICME-excluded
+# dataset, 1079 (78%) are exactly this single missing hour, 1051 of those
+# ending at hour 22. DTW_GAP_TOLERANCE_HOURS controls how many consecutive
+# missing hours evaluate_metrics() will bridge (linear interpolation) rather
+# than treat as a DTW block break -- see _build_dtw_blocks().
+DTW_GAP_TOLERANCE_HOURS = 1
 from data.benchmark.wsa_enlil.cr_data import fetch_cr_table
 from data.benchmark.empirical_model.eswf2_0_minmax import eswf2_minmax
 from data.benchmark.wsa_enlil.wsa_enlil_ccmc import WSA_ENLIL
@@ -107,6 +117,75 @@ def _dtw_score(y_true, y_pred, window=None):
     return round(dist, 2), len(path)
 
 
+def _build_dtw_blocks(sub_df, target_col, value_cols, icme_intervals,
+                      gap_tolerance_hours=DTW_GAP_TOLERANCE_HOURS):
+    """
+    Partition a chronologically sorted, already-dropna'd sub_df into
+    DTW-ready blocks, adding a 'block_id' column.
+
+    A gap in the nominal 1-hour cadence is bridged (linearly interpolated,
+    the (a+b)/2 average for a single missing hour) rather than starting a
+    new block, PROVIDED it is at most gap_tolerance_hours consecutive
+    missing hours AND doesn't overlap any ICME interval. This absorbs the
+    routine daily 21:00 UT AIA dark-frame exclusion (and other short,
+    incidental single/few-hour data gaps) so they don't fragment a real
+    contiguous observing period into artificial per-day blocks.
+
+    Any gap that overlaps an ICME-masked interval always starts a new block
+    and is never bridged, regardless of its duration -- ICME periods are a
+    deliberate exclusion (isolating ambient/CH-driven solar wind from
+    CME-driven perturbations), so interpolating a smooth line across one
+    would fabricate physically wrong values, not fill in noise.
+
+    icme_intervals : list of (start, end) Timestamp tuples, e.g. from
+                     utils.icme.fetch_icme_events().
+    """
+    sub_df = sub_df.reset_index(drop=True)
+    dt = sub_df["datetime"]
+
+    icme_starts = np.array([s.value for s, _ in icme_intervals])
+    icme_ends = np.array([e.value for _, e in icme_intervals])
+
+    def _overlaps_icme(t_start, t_end):
+        if len(icme_starts) == 0:
+            return False
+        return bool(np.any((icme_starts <= t_end.value) & (icme_ends >= t_start.value)))
+
+    block_ids = [0]
+    bridge_rows = []
+    current_block = 0
+    for i in range(1, len(dt)):
+        prev_t, curr_t = dt.iloc[i - 1], dt.iloc[i]
+        gap_hours = (curr_t - prev_t).total_seconds() / 3600.0
+        is_hourly_grid = abs(gap_hours - round(gap_hours)) < 1e-6
+        missing_hours = int(round(gap_hours)) - 1 if is_hourly_grid else None
+
+        if gap_hours <= 1.0:
+            pass  # nominal 1-hour cadence, same block
+        elif (
+            is_hourly_grid
+            and missing_hours <= gap_tolerance_hours
+            and not _overlaps_icme(prev_t, curr_t)
+        ):
+            prev_row, curr_row = sub_df.iloc[i - 1], sub_df.iloc[i]
+            missing_times = pd.date_range(prev_t, curr_t, freq="1h")[1:-1]
+            for j, t in enumerate(missing_times, start=1):
+                frac = j / (missing_hours + 1)
+                new_row = {"datetime": t, "block_id": current_block}
+                for c in [target_col] + list(value_cols):
+                    new_row[c] = prev_row[c] + frac * (curr_row[c] - prev_row[c])
+                bridge_rows.append(new_row)
+        else:
+            current_block += 1
+        block_ids.append(current_block)
+
+    out = sub_df.copy()
+    out["block_id"] = block_ids
+    if bridge_rows:
+        out = pd.concat([out, pd.DataFrame(bridge_rows)], ignore_index=True)
+    return out.sort_values(["block_id", "datetime"]).reset_index(drop=True)
+
+
 def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
     n = len(y_true)
     if n == 0:
@@ -132,7 +211,8 @@ def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
 
 def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                      model_cols=None, test_months=(10, 11, 12),
-                     include_dtw=False, dtw_window=None, train_months=range(1, 10)):
+                     include_dtw=False, dtw_window=None, train_months=range(1, 10),
+                     dtw_gap_tolerance_hours=DTW_GAP_TOLERANCE_HOURS):
     """
     Evaluate MAE/RMSE/CC (optionally DTW) on the Oct-Dec test months, ICME
     periods excluded, for each candidate model column.
@@ -155,6 +235,12 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
     training mean for group_by="phase" -- each row uses only the training
     data from its own group's years, so a per-phase row doesn't leak
     information a single global constant wouldn't have.
+
+    dtw_gap_tolerance_hours : when include_dtw, gaps of at most this many
+    consecutive missing hours are bridged (linearly interpolated) rather
+    than starting a new DTW block -- see _build_dtw_blocks(). Gaps that
+    overlap an ICME interval are always hard block breaks regardless of
+    this setting.
     """
     df = df.copy()
     df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
@@ -175,6 +261,8 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
 
     use_av = "av" in model_cols
     real_model_cols = [c for c in model_cols if c != "av"]
+
+    icme_intervals = fetch_icme_events() if include_dtw else []
 
     if group_by == "year":
         years = sorted(df["datetime"].dt.year.unique())
@@ -198,6 +286,24 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
             cols = cols + ["av"]
 
         sub_df = sub_df[["datetime", target_col] + cols].dropna().sort_values("datetime")
+
+        if include_dtw:
+            # DTW must only ever treat genuinely time-adjacent samples as
+            # adjacent. Both the Jan-Sep gap between years and any
+            # ICME-masked or otherwise-missing hours within a single Oct-Dec
+            # season leave array positions sitting next to each other despite
+            # being far apart in real time. Most within-season gaps, though,
+            # are just the routine daily 21:00 UT AIA dark-frame exclusion
+            # (a single missing hour, propagated to best_sr via its 96h/4-day
+            # lag) -- fragmenting a block over that isn't meaningful, so those
+            # are bridged (linearly interpolated) instead of split. See
+            # _build_dtw_blocks() for the exact rule, including the hard
+            # ICME-never-bridged guarantee.
+            sub_df_dtw = _build_dtw_blocks(
+                sub_df, target_col, cols, icme_intervals,
+                gap_tolerance_hours=dtw_gap_tolerance_hours,
+            )
+
         for model in cols:
             with np.errstate(invalid="ignore"):
                 row = _row_metrics(
@@ -205,19 +311,8 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                     include_dtw=False,
                 )
             if include_dtw:
-                # DTW must only ever treat genuinely time-adjacent samples as
-                # adjacent. Both the Jan-Sep gap between years and any
-                # ICME-masked or otherwise-missing hours within a single
-                # Oct-Dec season leave array positions sitting next to each
-                # other despite being far apart in real time (91 such
-                # within-year gaps >24h were found in this dataset, on top of
-                # the 14 year-boundary gaps -- not a rare edge case). Detect
-                # every break in the nominal 1-hour cadence and score+sum DTW
-                # over each contiguous block, instead of flattening the whole
-                # group into one sequence.
-                block_id = (sub_df["datetime"].diff().dt.total_seconds() > 3600).cumsum()
                 dtw_total, path_len_total = 0.0, 0
-                for _, block in sub_df.groupby(block_id):
+                for _, block in sub_df_dtw.groupby("block_id"):
                     if len(block) < 2:
                         continue
                     d, plen = _dtw_score(block[target_col].values, block[model].values, window=dtw_window)

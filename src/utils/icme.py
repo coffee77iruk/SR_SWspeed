@@ -8,6 +8,8 @@ mask_icme_events   : Flag ICME periods (and their lagged persistence windows) in
 make_icme_mask     : Build a boolean numpy array marking ICME time indices.
 """
 
+from functools import lru_cache
+
 import numpy as np
 import pandas as pd
 import requests
@@ -17,6 +19,7 @@ from io import StringIO
 ICME_URL = "https://izw1.caltech.edu/ACE/ASC/DATA/level3/icmetable2.htm"
 
 
+@lru_cache(maxsize=None)
 def fetch_icme_events(url: str = ICME_URL,
                       year_start: int = 2010,
                       year_end: int = 2024) -> list:
