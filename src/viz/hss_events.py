@@ -134,7 +134,7 @@ def plot_speed_profile_by_year(df, series_specs, icme_intervals, years=range(201
     plt.tight_layout(rect=[0, 0, 1, 0.98])
 
     if save_path:
-        plt.savefig(save_path, dpi=400)
+        plt.savefig(save_path, dpi=600)
     return fig, all_peak_lists
 
 
@@ -236,7 +236,7 @@ def plot_speed_profile_cr(df, cr_df, cr_pairs, series_specs, icme_intervals,
     plt.tight_layout(rect=[0, 0, 1, 0.92 if n_rows > 1 else 0.86])
 
     if save_path:
-        plt.savefig(save_path, dpi=400)
+        plt.savefig(save_path, dpi=600)
     return fig
 
 
@@ -465,23 +465,29 @@ def plot_speed_profile_cr_with_euv(df, cr_df, panels, series_specs, icme_interva
     plt.tight_layout(rect=[0, 0, 1, 0.88 if n_rows > 1 else 0.82])
 
     if save_path:
-        plt.savefig(save_path, dpi=400, bbox_inches="tight", facecolor="white")
+        plt.savefig(save_path, dpi=600, bbox_inches="tight", facecolor="white")
     return fig
+
+
+DEFAULT_EUV_PANEL_COLORS = ["darkviolet", "mediumblue", "deeppink"]  # one per CR pair
 
 
 def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_intervals,
                                          aia_dir="../data/sample",
-                                         color_prev="mediumpurple", color_now="mediumblue",
-                                         row_labels=None, save_path=None):
+                                         panel_colors=None, save_path=None):
     """
     Same 3-row Carrington-Rotation speed-profile plot as plot_speed_profile_cr
-    (unchanged size/layout for that part), with a 2xN grid of AIA 193A EUV
-    images (SPoCA CH contours) added below instead of beside each row -- one
-    column per panel, in the same left-to-right order as the speed rows
-    above, top EUV row = dt_prev, bottom EUV row = dt_now. Vertical lines on
-    each speed panel mark dt_prev/dt_now in the same colors as the EUV
-    panels' borders, so a reader can trace which images go with which speed
-    profile.
+    (unchanged size/layout for that part), with a single row of 2*N AIA 193A
+    EUV images (SPoCA CH contours) added below instead of beside each row --
+    one (dt_prev, dt_now) pair of columns per panel, in the same left-to-right
+    order as the speed rows above. Each CR pair gets its own color (one
+    vertical-line/EUV-border color per panel, not per dt_prev/dt_now), with
+    dt_prev drawn dashed and dt_now drawn solid -- both the speed panel's
+    vertical lines and that panel's two EUV borders/titles -- so a reader can
+    trace which images go with which speed profile via color, and tell
+    prev/now apart via line style. Panel labels (a)-(c) on the speed titles
+    and (d)-(i) in the EUV panels' top-left corners (matching Figure 1's
+    style) number all 9 panels in reading order.
 
     panels : list of dicts, each {"label": str, "crs": [cr1, cr2],
              "dt_prev": datetime, "dt_now": datetime} -- same order as the
@@ -489,9 +495,10 @@ def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_i
              showing the source CH's prior appearance).
     aia_dir : folder containing the 193A FITS files for dt_prev/dt_now of
              every panel (nearest-timestamp match, see _find_nearest_fits).
-    row_labels : optional (label_prev, label_now) tuple shown to the left of
-                the bottom two EUV rows (e.g. ("27 days prior", "Current"));
-                omitted entirely if None.
+    panel_colors : list of len(panels) colors, one per CR pair -- defaults to
+                   DEFAULT_EUV_PANEL_COLORS, chosen to stay visually distinct
+                   from the model colors already used elsewhere in the plot
+                   (MODEL_COLORS: black, red, green, deepskyblue, orange).
     """
     time_all = df["datetime"]
     icme_mask = make_icme_mask(time_all, icme_intervals)
@@ -515,13 +522,25 @@ def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_i
                              aia_now=aia_now, rgba_now=rgba_now, ext_now=ext_now, poly_now=poly_now))
 
     n_panels = len(panels)
-    fig = plt.figure(figsize=(30, 5 * n_panels + 2.5 + 18), facecolor="white")
-    gs = gridspec.GridSpec(n_panels + 2, n_panels, height_ratios=[5] * n_panels + [9, 9],
-                           hspace=0.4, wspace=0.12, top=0.95, bottom=0.03, left=0.05, right=0.99)
+    panel_colors = panel_colors or DEFAULT_EUV_PANEL_COLORS
+    assert len(panel_colors) == n_panels, "need one color per CR pair"
+    panel_labels = "abcdefghijklmnopqrstuvwxyz"
+
+    fig = plt.figure(figsize=(30, 5 * n_panels + 2.5 + 6), facecolor="white")
+    # Two GridSpecs sharing one figure: the speed rows reserve room on their
+    # left for the "Speed [km/s]" y-axis label + tick labels (matplotlib
+    # draws those outside the axes' own box, so bbox_inches="tight" expands
+    # the saved canvas leftward to fit them) -- the EUV row has no such
+    # label, so giving it the same "left" as the speed rows leaves a blank
+    # strip on its left once the figure is cropped to that wider bbox.
+    # Starting the EUV row further left (into where the ylabel's overflow
+    # already extends) makes it fill flush with the true left edge instead.
+    gs_speed = gridspec.GridSpec(n_panels, 1, hspace=0.32, top=0.95, bottom=0.31, left=0.045, right=0.995)
+    gs_euv = gridspec.GridSpec(1, n_panels * 2, wspace=0.08, top=0.24, bottom=0.02, left=-0.01, right=0.995)
 
     axes_speed = []
     for row_idx, panel in enumerate(panels):
-        ax_speed = fig.add_subplot(gs[row_idx, :])
+        ax_speed = fig.add_subplot(gs_speed[row_idx, 0])
         axes_speed.append(ax_speed)
 
         target_crs = panel["crs"]
@@ -553,8 +572,9 @@ def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_i
                       color=color, markersize=12)
 
         dt_prev, dt_now = panel["dt_prev"], panel["dt_now"]
-        ax_speed.axvline(dt_prev, color=color_prev, lw=5, ls="--", zorder=10, alpha=0.9)
-        ax_speed.axvline(dt_now, color=color_now, lw=5, ls="-", zorder=10, alpha=0.9)
+        panel_color = panel_colors[row_idx]
+        ax_speed.axvline(dt_prev, color=panel_color, lw=7, ls="--", zorder=10, alpha=0.9)
+        ax_speed.axvline(dt_now, color=panel_color, lw=7, ls="-", zorder=10, alpha=0.9)
 
         ax_speed.set_xlim(t_plot_start, t_plot_end)
         ax_speed.set_ylim(250, 900)
@@ -562,25 +582,26 @@ def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_i
         ax_speed.tick_params(axis="y", labelsize=30)
         ax_speed.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
         ax_speed.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-        ax_speed.tick_params(axis="x", labelsize=30)
+        ax_speed.tick_params(axis="x", labelsize=33)
         ax_speed.set_ylabel("Speed [km/s]", fontsize=34, labelpad=15)
-        ax_speed.set_title(f"CR {target_crs[0]}-{target_crs[1]}  "
+        ax_speed.set_title(f"({panel_labels[row_idx]}) CR {target_crs[0]}-{target_crs[1]}  "
                           f"({t_plot_start.strftime('%Y %b %d')} - {t_plot_end.strftime('%Y %b %d')})",
-                          fontsize=36, pad=10)
+                          fontsize=39, pad=10)
         ax_speed.margins(x=0.005)
         if row_idx < n_panels - 1:
             ax_speed.set_xlabel("")
         else:
-            ax_speed.set_xlabel("Date", fontsize=36, labelpad=10)
+            ax_speed.set_xlabel("Date", fontsize=39, labelpad=10)
 
     handles, labels = axes_speed[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=len(labels), fontsize=32,
-              frameon=False, bbox_to_anchor=(0.5, 0.985))
+    fig.legend(handles, labels, loc="upper center", ncol=len(labels), fontsize=35,
+              frameon=False, bbox_to_anchor=(0.5, 1.04))
 
-    for col_idx, (panel, data) in enumerate(zip(panels, aia_data)):
-        for row_off, key, dt, color in [(0, "prev", panel["dt_prev"], color_prev),
-                                        (1, "now", panel["dt_now"], color_now)]:
-            ax_euv = fig.add_subplot(gs[n_panels + row_off, col_idx])
+    for panel_idx, (panel, data) in enumerate(zip(panels, aia_data)):
+        color = panel_colors[panel_idx]
+        for sub_col, key, dt, ls in [(0, "prev", panel["dt_prev"], (0, (1, 5))), (1, "now", panel["dt_now"], "-")]:
+            col_idx = panel_idx * 2 + sub_col
+            ax_euv = fig.add_subplot(gs_euv[0, col_idx])
             ax_euv.set_facecolor("black")
             ax_euv.imshow(data[f"rgba_{key}"], origin="lower", extent=data[f"ext_{key}"])
             draw_ch_contour(ax_euv, data[f"aia_{key}"], data[f"poly_{key}"], data[f"ext_{key}"])
@@ -589,15 +610,14 @@ def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_i
             ax_euv.set_xticks([])
             ax_euv.set_yticks([])
             for spine in ax_euv.spines.values():
-                spine.set_edgecolor(color); spine.set_linewidth(6)
-            ax_euv.set_title(dt.strftime("%Y %b %d (%H:%M UT)"), fontsize=26, color=color, pad=10)
-
-            if row_labels and col_idx == 0:
-                label_text = row_labels[row_off]
-                ax_euv.text(-0.12, 0.5, label_text, transform=ax_euv.transAxes,
-                           fontsize=28, color=color, rotation=90,
-                           ha="center", va="center")
+                spine.set_edgecolor(color); spine.set_linewidth(9); spine.set_linestyle(ls)
+                spine.set_capstyle("round")
+            ax_euv.set_title(dt.strftime("%Y %b %d (%H:%M)"), fontsize=30, color=color, pad=10)
+            ax_euv.text(0.03, 0.95, f"({panel_labels[n_panels + col_idx]})",
+                       transform=ax_euv.transAxes, fontsize=40,
+                       ha="left", va="top", color="white",
+                       bbox=dict(facecolor="none", edgecolor="none"))
 
     if save_path:
-        plt.savefig(save_path, dpi=400, bbox_inches="tight", facecolor="white")
+        plt.savefig(save_path, dpi=600, bbox_inches="tight", facecolor="white")
     return fig

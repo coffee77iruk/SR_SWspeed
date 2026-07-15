@@ -58,10 +58,11 @@ def plot_sr_vs_sunspot(metrics_yearly_df, date, sunspot_m, sunspot_ms,
     fig, axes = plt.subplots(3, 1, figsize=(16, 11), sharey=False)
     if transparent:
         fig.patch.set_facecolor("none")
-    fontsize = 18
+    fontsize = 21
     years = pd.date_range("2010-01-01", "2025-01-01", freq="YS")
+    model_handles, model_labels = None, None
 
-    for ax, metric in zip(axes, metrics):
+    for row_idx, (ax, metric) in enumerate(zip(axes, metrics)):
         if transparent:
             ax.set_facecolor("white")
         ax2 = ax.twinx()
@@ -75,28 +76,32 @@ def plot_sr_vs_sunspot(metrics_yearly_df, date, sunspot_m, sunspot_ms,
         ax.plot(date, sunspot_ms, c="black", alpha=0.8, label="13-month smoothed")
         if metric == "CC":
             ax.set_xlabel("Year", fontsize=fontsize)
-        ax.set_ylabel("Sunspot Number", fontsize=fontsize)
+        if row_idx == 1:
+            ax.set_ylabel("Sunspot Number", fontsize=fontsize)
         ax.set_ylim(0, 250)
         ax.legend(loc="upper left", fontsize=fontsize - 4, labelspacing=0.3, handlelength=1.2)
-        ax.tick_params(axis="y", labelsize=fontsize - 4)
 
         best_set = None
         for m in choose_models:
             yvals = interped[m][metric]
             style = MODEL_STYLES[m]
             linestyle = "-" if m == "best_sr" else "--"
-            label = f"{metric} of {style['label']}"
-            ax2.plot(date, yvals, c=style["color"], label=label, linestyle=linestyle, linewidth=2)
+            linewidth = 3 if m == "best_sr" else 2
+            line, = ax2.plot(date, yvals, c=style["color"], label=style["label"],
+                            linestyle=linestyle, linewidth=linewidth)
             if m == "best_sr":
                 best_set = yvals
 
         ax2.set_ylabel(metric, fontsize=fontsize + 1)
-        ax2.legend(loc="upper right", fontsize=fontsize - 4, labelspacing=0.3, handlelength=1.2)
+        if row_idx == 0:
+            model_handles, model_labels = ax2.get_legend_handles_labels()
         if metric in ("MAE", "RMSE"):
-            ax2.set_ylim(30, 170)
+            ax2.set_ylim(20, 180)
+            ax2.set_yticks([30, 60, 90, 120, 150, 180])
         if metric == "CC":
-            ax2.set_ylim(-0.2, 1.0)
-        ax2.tick_params(axis="y", labelsize=fontsize - 4)
+            ax2.set_ylim(-0.15, 1.0)
+            ax2.set_yticks([0.0, 0.25, 0.5, 0.75, 1.0])
+            ax2.set_yticklabels(["0.0", "0.25", "0.50", "0.75", "1.0"])
 
         if best_set is not None:
             if metric in ("MAE", "RMSE"):
@@ -108,27 +113,33 @@ def plot_sr_vs_sunspot(metrics_yearly_df, date, sunspot_m, sunspot_ms,
             target_x, target_val = date[target_idx], best_set[target_idx]
             ax2.scatter(target_x, target_val, color="black", s=60, zorder=5, edgecolor="white")
             ax2.text(target_x, target_val + (5 if metric != "CC" else 0.05),
-                    f"{target_label}\n({target_x.year})", color="black", fontsize=fontsize - 4,
+                    f"{target_label} ({target_x.year})", color="black", fontsize=fontsize - 4,
                     ha="center", va="bottom",
-                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.6, boxstyle="round,pad=0.25"))
+                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, boxstyle="round,pad=0.25"))
 
         ax.set_xticks(years)
         ax.set_xticklabels([str(y.year) for y in years], rotation=0, fontsize=fontsize - 3)
-        ax.tick_params(axis="y", labelsize=fontsize - 3)
-        ax2.tick_params(axis="y", labelsize=fontsize - 3)
+        ax.tick_params(axis="y", labelsize=fontsize - 4.5)
+        ax2.tick_params(axis="y", labelsize=fontsize - 4.5)
         ax.margins(x=0.01)
         ax2.margins(x=0.01)
 
-    plt.tight_layout(w_pad=3)
+    fig.legend(model_handles, model_labels, loc="upper center", ncol=len(model_labels),
+              fontsize=fontsize - 2, frameon=False, bbox_to_anchor=(0.5, 1.02))
+    plt.tight_layout(w_pad=3, rect=[0, 0, 1, 0.96])
     if save_path:
-        plt.savefig(save_path, dpi=400, facecolor="none" if transparent else "white")
+        plt.savefig(save_path, dpi=600, facecolor="none" if transparent else "white", bbox_inches="tight")
     return fig
 
 
 def plot_binned_performance(stats_dict, bin_labels, color_map,
-                            metrics=("MAE", "RMSE", "Bias"), figsize=(35, 7),
+                            metrics=("MAE", "RMSE", "Bias"), figsize=(20, 24),
                             transparent=False, save_path=None):
-    """Line plot (with bootstrap CI error bars) of binned MAE/RMSE/Bias/CC."""
+    """Line plot (with bootstrap CI error bars) of binned MAE/RMSE/Bias/CC,
+    one row per metric (stacked, not side-by-side) so the shared x-axis
+    (speed-range bins) only needs to be drawn once, under the bottom row --
+    and every row gets the full figure width instead of splitting it three
+    ways."""
     models = list(stats_dict.keys())
     display_names = [m.replace("SR-derived formula", "SR-derived\nformula") for m in models]
 
@@ -139,11 +150,11 @@ def plot_binned_performance(stats_dict, bin_labels, color_map,
     fig = plt.figure(figsize=figsize)
     if transparent:
         fig.patch.set_facecolor("none")
-    gs = gridspec.GridSpec(1, len(metrics), hspace=0.2, wspace=0.2)
+    gs = gridspec.GridSpec(len(metrics), 1, hspace=0.10, top=0.94)
     axes_line = []
 
-    for col_idx, metric in enumerate(metrics):
-        ax = fig.add_subplot(gs[0, col_idx])
+    for row_idx, metric in enumerate(metrics):
+        ax = fig.add_subplot(gs[row_idx, 0])
         axes_line.append(ax)
         x = np.arange(len(bin_labels))
 
@@ -156,30 +167,41 @@ def plot_binned_performance(stats_dict, bin_labels, color_map,
             if lo_col in stats_dict[m].columns and hi_col in stats_dict[m].columns:
                 yerr = np.array([stats_dict[m][lo_col].values.astype(float),
                                  stats_dict[m][hi_col].values.astype(float)])
-            ax.errorbar(x, y, yerr=yerr, fmt="o-", color=color, lw=2.5, markersize=9,
-                       capsize=5, capthick=1.5, elinewidth=1.5, label=legend_label)
+            lw = 5.5 if m == "SR-derived formula" else 3.5
+            ax.errorbar(x, y, yerr=yerr, fmt="o-", color=color, lw=lw, markersize=11,
+                       capsize=5, capthick=1.5, elinewidth=2.2, label=legend_label)
 
         if metric == "Bias":
             ax.axhline(0, color="gray", lw=1.2, ls="--")
             ax.set_ylim(-320, 120)
             ax.set_yticks(np.arange(-300, 101, 100))
         elif metric in ("MAE", "RMSE"):
-            ax.set_ylim(-10, 330)
+            ax.set_ylim(0, 330)
             ax.set_yticks(np.arange(0, 331, 50))
 
         ax.set_xticks(x)
-        ax.set_xticklabels(bin_labels_n, fontsize=22)
-        ax.set_xlabel("OMNI speed range [km/s]", fontsize=27, labelpad=12)
-        ax.set_ylabel(metric, fontsize=27)
-        ax.tick_params(axis="y", labelsize=25)
+        if row_idx == len(metrics) - 1:
+            ax.set_xticklabels(bin_labels_n, fontsize=29)
+            ax.set_xlabel("OMNI speed range [km/s]", fontsize=34, labelpad=12)
+        else:
+            ax.set_xticklabels([])
+        ax.set_ylabel(metric, fontsize=34)
+        ax.tick_params(axis="y", labelsize=29)
         ax.grid(axis="y", alpha=0.35)
 
+    # Draw order (from `models`) controls z-order -- SR-derived formula is
+    # drawn last so it layers on top of the other lines where they overlap --
+    # but the legend always lists it first regardless of draw order.
     handles, labels = axes_line[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=len(models), fontsize=27,
-              framealpha=0, bbox_to_anchor=(0.5, 1.02))
+    if "SR-derived formula" in labels:
+        idx = labels.index("SR-derived formula")
+        handles = [handles[idx]] + handles[:idx] + handles[idx + 1:]
+        labels = [labels[idx]] + labels[:idx] + labels[idx + 1:]
+    fig.legend(handles, labels, loc="upper center", ncol=len(models), fontsize=29,
+              framealpha=0, bbox_to_anchor=(0.5, 0.99))
 
     if save_path:
-        plt.savefig(save_path, dpi=400, bbox_inches="tight",
+        plt.savefig(save_path, dpi=600, bbox_inches="tight",
                    facecolor="none" if transparent else "white")
     return fig
 
