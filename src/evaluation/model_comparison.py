@@ -191,7 +191,7 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
             sub_df["av"] = av_const
             cols = cols + ["av"]
 
-        sub_df = sub_df[["datetime", target_col] + cols].dropna()
+        sub_df = sub_df[["datetime", target_col] + cols].dropna().sort_values("datetime")
         for model in cols:
             with np.errstate(invalid="ignore"):
                 row = _row_metrics(
@@ -199,23 +199,22 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                     include_dtw=False,
                 )
             if include_dtw:
-                # Oct-Dec-only rows from different years are not temporally
-                # adjacent (there's a Jan-Sep gap between them), so DTW must
-                # not be run on them flattened together as if they were one
-                # continuous series -- that would let the algorithm "warp"
-                # across a 9-month calendar gap as if it were a few hours.
-                # Sum the DTW score over each calendar-contiguous Oct-Dec
-                # block (one per year in this group) instead.
+                # DTW must only ever treat genuinely time-adjacent samples as
+                # adjacent. Both the Jan-Sep gap between years and any
+                # ICME-masked or otherwise-missing hours within a single
+                # Oct-Dec season leave array positions sitting next to each
+                # other despite being far apart in real time (91 such
+                # within-year gaps >24h were found in this dataset, on top of
+                # the 14 year-boundary gaps -- not a rare edge case). Detect
+                # every break in the nominal 1-hour cadence and score+sum DTW
+                # over each contiguous block, instead of flattening the whole
+                # group into one sequence.
+                block_id = (sub_df["datetime"].diff().dt.total_seconds() > 3600).cumsum()
                 dtw_total, any_valid = 0.0, False
-                for yr in group_years:
-                    yr_mask = sub_df["datetime"].dt.year == yr
-                    if yr_mask.sum() < 2:
+                for _, block in sub_df.groupby(block_id):
+                    if len(block) < 2:
                         continue
-                    d = _dtw_score(
-                        sub_df.loc[yr_mask, target_col].values,
-                        sub_df.loc[yr_mask, model].values,
-                        window=dtw_window,
-                    )
+                    d = _dtw_score(block[target_col].values, block[model].values, window=dtw_window)
                     if not np.isnan(d):
                         dtw_total += d
                         any_valid = True
