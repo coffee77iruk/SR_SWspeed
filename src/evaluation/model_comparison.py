@@ -191,13 +191,35 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
             sub_df["av"] = av_const
             cols = cols + ["av"]
 
-        sub_df = sub_df[[target_col] + cols].dropna()
+        sub_df = sub_df[["datetime", target_col] + cols].dropna()
         for model in cols:
             with np.errstate(invalid="ignore"):
                 row = _row_metrics(
                     sub_df[target_col].values, sub_df[model].values,
-                    include_dtw=include_dtw, dtw_window=dtw_window,
+                    include_dtw=False,
                 )
+            if include_dtw:
+                # Oct-Dec-only rows from different years are not temporally
+                # adjacent (there's a Jan-Sep gap between them), so DTW must
+                # not be run on them flattened together as if they were one
+                # continuous series -- that would let the algorithm "warp"
+                # across a 9-month calendar gap as if it were a few hours.
+                # Sum the DTW score over each calendar-contiguous Oct-Dec
+                # block (one per year in this group) instead.
+                dtw_total, any_valid = 0.0, False
+                for yr in group_years:
+                    yr_mask = sub_df["datetime"].dt.year == yr
+                    if yr_mask.sum() < 2:
+                        continue
+                    d = _dtw_score(
+                        sub_df.loc[yr_mask, target_col].values,
+                        sub_df.loc[yr_mask, model].values,
+                        window=dtw_window,
+                    )
+                    if not np.isnan(d):
+                        dtw_total += d
+                        any_valid = True
+                row["DTW"] = round(dtw_total, 2) if any_valid else np.nan
             row["model"] = model
             if group_col:
                 row[group_col] = group_val

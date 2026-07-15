@@ -32,10 +32,10 @@ Entire test period (2010–2024, Oct–Dec months, ICME periods excluded):
 
 | Model | MAE [km/s] | RMSE [km/s] | CC | DTW |
 |---|---|---|---|---|
-| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **1,050,466** |
-| 27-day persistence | 70.9 | 96.2 | 0.46 | 1,137,324 |
-| ESWF | 82.3 | 108.9 | 0.38 | 1,369,571 |
-| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 1,823,303 |
+| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **1,054,776** |
+| 27-day persistence | 70.9 | 96.2 | 0.46 | 1,145,274 |
+| ESWF | 82.3 | 108.9 | 0.38 | 1,375,527 |
+| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 1,830,839 |
 
 DTW (Dynamic Time Warping distance, Samara et al. 2022; Edward-Inatimi et al. 2026)
 captures whether the *shape*/timing of predicted speed enhancements matches
