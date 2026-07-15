@@ -285,7 +285,20 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
             sub_df["av"] = av_const
             cols = cols + ["av"]
 
-        sub_df = sub_df[["datetime", target_col] + cols].dropna().sort_values("datetime")
+        dtw_cols = cols
+        if include_dtw:
+            # Reference constant for SSF_mean: the Oct-Dec test period's own
+            # true mean speed (scoped to this group's years), captured before
+            # any column subsetting/dropna below. Deliberately different from
+            # "av" (which uses the Jan-Sep training mean to avoid leaking
+            # test-period information) -- SSF_mean asks "how much better than
+            # trivially guessing the true test-period average", which is
+            # meant to use in-sample information, the same way R^2's null
+            # model uses the test set's own mean.
+            sub_df["_test_mean"] = sub_df[target_col].mean()
+            dtw_cols = cols + ["_test_mean"]
+
+        sub_df = sub_df[["datetime", target_col] + dtw_cols].dropna().sort_values("datetime")
 
         if include_dtw:
             # DTW must only ever treat genuinely time-adjacent samples as
@@ -300,9 +313,27 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
             # _build_dtw_blocks() for the exact rule, including the hard
             # ICME-never-bridged guarantee.
             sub_df_dtw = _build_dtw_blocks(
-                sub_df, target_col, cols, icme_intervals,
+                sub_df, target_col, dtw_cols, icme_intervals,
                 gap_tolerance_hours=dtw_gap_tolerance_hours,
             )
+            # Raw block-summed DTW cost (not yet normalized), one sum per
+            # column -- reused both for DTW_mean (divided by that column's
+            # own path length, an absolute km/s score) and for the SSF
+            # ratios (Samara et al. (2022)'s ratio-normalization: a model's
+            # raw DTW cost divided by a reference model's own raw DTW cost
+            # against the same OMNI series over the same blocks).
+            raw_sum, path_sum = {}, {}
+            for c in dtw_cols:
+                d_tot, p_tot = 0.0, 0
+                for _, block in sub_df_dtw.groupby("block_id"):
+                    if len(block) < 2:
+                        continue
+                    d, p = _dtw_score(block[target_col].values, block[c].values, window=dtw_window)
+                    if not np.isnan(d):
+                        d_tot += d
+                        p_tot += p
+                raw_sum[c] = d_tot
+                path_sum[c] = p_tot
 
         for model in cols:
             with np.errstate(invalid="ignore"):
@@ -311,14 +342,6 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                     include_dtw=False,
                 )
             if include_dtw:
-                dtw_total, path_len_total = 0.0, 0
-                for _, block in sub_df_dtw.groupby("block_id"):
-                    if len(block) < 2:
-                        continue
-                    d, plen = _dtw_score(block[target_col].values, block[model].values, window=dtw_window)
-                    if not np.isnan(d):
-                        dtw_total += d
-                        path_len_total += plen
                 # Report cost-per-matched-pair (total cost / total warping
                 # path length), not the raw sum: a sum has no natural
                 # comparison point across groups with different N (e.g.
@@ -330,7 +353,16 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                 # extra matched pairs they actually produced, instead of
                 # concentrating that cost onto a point count that doesn't
                 # reflect the repeated matches.
-                row["DTW_mean"] = round(dtw_total / path_len_total, 2) if path_len_total > 0 else np.nan
+                row["DTW_mean"] = round(raw_sum[model] / path_sum[model], 2) if path_sum[model] > 0 else np.nan
+                # SSF (Sequence Similarity Factor, Samara et al. 2022): a
+                # ratio, so it's computed from the raw block-summed costs
+                # directly (both numerator and denominator use the same
+                # blocks/window), not from the already path-length-divided
+                # DTW_mean values.
+                ref_mean_sum = raw_sum.get("_test_mean", 0)
+                row["SSF_mean"] = round(raw_sum[model] / ref_mean_sum, 3) if ref_mean_sum > 0 else np.nan
+                ref_27d_sum = raw_sum.get("speed_p27", 0)
+                row["SSF_27days"] = round(raw_sum[model] / ref_27d_sum, 3) if ref_27d_sum > 0 else np.nan
             row["model"] = model
             if group_col:
                 row[group_col] = group_val

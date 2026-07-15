@@ -30,21 +30,24 @@ periods excluded), both as a continuous time series and as a high-speed-event
 
 Entire test period (2010–2024, Oct–Dec months, ICME periods excluded):
 
-| Model | MAE [km/s] | RMSE [km/s] | CC | DTW_mean [km/s] |
-|---|---|---|---|---|
-| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **28.9** |
-| 27-day persistence | 70.9 | 96.2 | 0.46 | 31.9 |
-| ESWF | 82.3 | 108.9 | 0.38 | 37.2 |
-| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 54.8 |
+| Model | MAE [km/s] | RMSE [km/s] | CC | SSF_mean | SSF_27days |
+|---|---|---|---|---|---|
+| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **0.574** | **0.911** |
+| 27-day persistence | 70.9 | 96.2 | 0.46 | 0.630 | 1.000 |
+| ESWF | 82.3 | 108.9 | 0.38 | 0.722 | 1.145 |
+| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 0.981 | 1.556 |
 
-DTW_mean (mean Dynamic Time Warping distance, Samara et al. 2022; Edward-Inatimi
-et al. 2026 -- reported here as cost-per-matched-pair, i.e. the raw DTW cost
-divided by the warping path's length rather than the raw point count, so it's
-on the same km/s scale as MAE/RMSE without diluting singularities, over a
-+-2-day Sakoe-Chiba window following Samara et al. (2022)'s own EUHFORIA
-window) captures whether the *shape*/timing of predicted speed enhancements
-matches observations, not just pointwise error — the SR-derived formula has
-the lowest (best) DTW_mean of all four models.
+SSF (Sequence Similarity Factor, Samara et al. 2022; Edward-Inatimi et al. 2026)
+is a ratio-normalized Dynamic Time Warping score capturing whether the
+*shape*/timing of predicted speed enhancements matches observations, not just
+pointwise error: a model's DTW cost against OMNI divided by a *reference*
+model's own DTW cost against OMNI, over a +-2-day Sakoe-Chiba window following
+Samara et al. (2022)'s own EUHFORIA window. SSF_mean's reference is a constant
+equal to the Oct-Dec test period's own true mean speed; SSF_27days' reference
+is the 27-day persistence baseline itself (so persistence's own SSF_27days is
+exactly 1.000, and any value below 1 means that model beats plain
+persistence) — the SR-derived formula has the lowest (best) SSF under both
+references, of all four models.
 
 <p align="center">
   <img src="figures/figure1_ch_parameters.png" alt="A_CH and P_CH computation from SDO/AIA EUV images" width="850">
