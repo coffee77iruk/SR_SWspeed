@@ -157,7 +157,7 @@ def plot_speed_profile_cr(df, cr_df, cr_pairs, series_specs, icme_intervals,
     sr_col = next((c for c, l in series_specs if "SR" in l), None)
 
     n_rows = len(cr_pairs)
-    fig, axes = plt.subplots(n_rows, 1, figsize=(30, 5 * n_rows), sharex=False, sharey=True)
+    fig, axes = plt.subplots(n_rows, 1, figsize=(30, 5 * n_rows + 2.5), sharex=False, sharey=True)
     if n_rows == 1:
         axes = [axes]
 
@@ -195,10 +195,10 @@ def plot_speed_profile_cr(df, cr_df, cr_pairs, series_specs, icme_intervals,
             print("-" * 55)
 
         shade_icme(ax, icme_intervals, t0=t_plot_start, t1=t_plot_end, facecolor="gray", alpha=0.4)
-        ax.axvline(t_ends[0], color="gray", linestyle=":", linewidth=2, alpha=0.8)
+        ax.axvline(t_ends[0], color="gray", linestyle=":", linewidth=3, alpha=0.8)
         for cr_num, t_s in zip(target_crs, t_starts):
             ax.text(t_s + timedelta(hours=6), 868, f"CR {cr_num}", ha="left", va="top",
-                   fontsize=24, color="gray")
+                   fontsize=32, color="gray")
 
         if has_band and sr_col:
             ax.fill_between(cr_df_plot[time_col],
@@ -206,34 +206,34 @@ def plot_speed_profile_cr(df, cr_df, cr_pairs, series_specs, icme_intervals,
                            cr_df_plot[sr_col] + df.loc[cr_df_plot.index, "max_sqrt_AP"],
                            color="red", alpha=0.2)
 
-        ax.plot(cr_df_plot[time_col], cr_df_plot["speed"], color=MODEL_COLORS["OMNI"], lw=3, label="OMNI")
+        ax.plot(cr_df_plot[time_col], cr_df_plot["speed"], color=MODEL_COLORS["OMNI"], lw=5, label="OMNI")
         plot_peaks(ax, sir_dicts["OMNI"], df["speed"], time_all, time_cr, icme_mask,
                   color=MODEL_COLORS["OMNI"], markersize=12)
 
         for colname, label in series_specs:
             color = MODEL_COLORS.get(label, "gray")
-            ls, lw = ("-", 3) if "SR" in label else ("--", 2)
+            ls, lw = ("-", 5) if "SR" in label else ("--", 3)
             ax.plot(cr_df_plot[time_col], cr_df_plot[colname], color=color, lw=lw, linestyle=ls, label=label)
             plot_peaks(ax, sir_dicts[label], df[colname], time_all, time_cr, icme_mask, color=color, markersize=12)
 
         ax.set_xlim(t_plot_start, t_plot_end)
         ax.set_ylim(250, 900)
         ax.set_yticks([400, 600, 800])
-        ax.tick_params(axis="y", labelsize=26)
+        ax.tick_params(axis="y", labelsize=30)
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-        ax.tick_params(axis="x", labelsize=26)
-        ax.set_ylabel("Speed [km/s]", fontsize=28, labelpad=15)
+        ax.tick_params(axis="x", labelsize=30)
+        ax.set_ylabel("Speed [km/s]", fontsize=34, labelpad=15)
         ax.set_title(f"CR {target_crs[0]}-{target_crs[1]}  "
                     f"({t_plot_start.strftime('%Y %b %d')} - {t_plot_end.strftime('%Y %b %d')})",
-                    fontsize=28, pad=10)
+                    fontsize=36, pad=10)
         ax.margins(x=0.005)
 
-    axes[-1].set_xlabel("Date", fontsize=28, labelpad=10)
+    axes[-1].set_xlabel("Date", fontsize=36, labelpad=10)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=len(labels), fontsize=26,
-              frameon=False, bbox_to_anchor=(0.5, 0.995))
-    plt.tight_layout(rect=[0, 0, 1, 0.95 if n_rows > 1 else 0.86])
+    fig.legend(handles, labels, loc="upper center", ncol=len(labels), fontsize=32,
+              frameon=False, bbox_to_anchor=(0.5, 0.99))
+    plt.tight_layout(rect=[0, 0, 1, 0.92 if n_rows > 1 else 0.86])
 
     if save_path:
         plt.savefig(save_path, dpi=400)
@@ -374,9 +374,9 @@ def plot_speed_profile_cr_with_euv(df, cr_df, panels, series_specs, icme_interva
                              aia_now=aia_now, rgba_now=rgba_now, ext_now=ext_now, poly_now=poly_now))
 
     n_rows = len(panels)
-    fig = plt.figure(figsize=(34, 5 * n_rows), facecolor="white")
-    gs_speed = gridspec.GridSpec(n_rows, 1, left=0.34, right=0.99, hspace=0.3, top=0.93, bottom=0.07)
-    gs_euv = gridspec.GridSpec(n_rows, 2, left=0.04, right=0.30, hspace=0.3, wspace=0.05, top=0.93, bottom=0.07)
+    fig = plt.figure(figsize=(34, 5 * n_rows + 3), facecolor="white")
+    gs_speed = gridspec.GridSpec(n_rows, 1, left=0.34, right=0.99, hspace=0.3, top=0.88, bottom=0.07)
+    gs_euv = gridspec.GridSpec(n_rows, 2, left=0.01, right=0.26, hspace=0.3, wspace=0.15, top=0.88, bottom=0.07)
 
     axes_speed = []
     for row_idx, (panel, data) in enumerate(zip(panels, aia_data)):
@@ -389,9 +389,15 @@ def plot_speed_profile_cr_with_euv(df, cr_df, panels, series_specs, icme_interva
             draw_ch_contour(ax_euv, data[f"aia_{key}"], data[f"poly_{key}"], data[f"ext_{key}"])
             set_hpc_axes(ax_euv, data[f"ext_{key}"], show_xlabel=False, show_ylabel=False,
                         label_fs=1, tick_fs=16, grid=True)
+            ax_euv.set_xticks([])
+            ax_euv.set_yticks([])
             for spine in ax_euv.spines.values():
                 spine.set_edgecolor(color); spine.set_linewidth(6)
-            ax_euv.set_title(dt.strftime("%Y %b %d %H:%M UT"), fontsize=22, color=color, pad=8)
+            ax_euv.set_title(dt.strftime("%Y %b %d \n (%H:%M UT)"), fontsize=30, color=color, pad=12)
+
+            if row_idx == n_rows - 1:
+                label_text = "27 days prior" if col == 0 else "Current"
+                ax_euv.set_xlabel(label_text, fontsize=34, color=color, labelpad=10)
 
         ax_speed = fig.add_subplot(gs_speed[row_idx, 0])
         axes_speed.append(ax_speed)
@@ -403,10 +409,10 @@ def plot_speed_profile_cr_with_euv(df, cr_df, panels, series_specs, icme_interva
         time_cr = cr_df_plot["datetime"]
 
         shade_icme(ax_speed, icme_intervals, t0=t_plot_start, t1=t_plot_end, facecolor="gray", alpha=0.4)
-        ax_speed.axvline(t_ends[0], color="gray", linestyle=":", linewidth=2, alpha=0.8)
+        ax_speed.axvline(t_ends[0], color="gray", linestyle=":", linewidth=3, alpha=0.8)
         for cr_num, t_s in zip(target_crs, t_starts):
             ax_speed.text(t_s + timedelta(hours=6), 868, f"CR {cr_num}", ha="left", va="top",
-                         fontsize=28, color="gray")
+                         fontsize=32, color="gray")
 
         if has_band and sr_col:
             ax_speed.fill_between(cr_df_plot["datetime"],
@@ -414,12 +420,12 @@ def plot_speed_profile_cr_with_euv(df, cr_df, panels, series_specs, icme_interva
                                  cr_df_plot[sr_col] + df.loc[cr_df_plot.index, "max_sqrt_AP"],
                                  color="red", alpha=0.2)
 
-        ax_speed.plot(cr_df_plot["datetime"], cr_df_plot["speed"], color=MODEL_COLORS["OMNI"], lw=3, label="OMNI")
+        ax_speed.plot(cr_df_plot["datetime"], cr_df_plot["speed"], color=MODEL_COLORS["OMNI"], lw=5, label="OMNI")
         plot_peaks(ax_speed, sir_dicts["OMNI"], df["speed"], time_all, time_cr, icme_mask,
                   color=MODEL_COLORS["OMNI"], markersize=12)
         for colname, label in series_specs:
             color = MODEL_COLORS.get(label, "gray")
-            ls, lw = ("-", 3) if "SR" in label else ("--", 2)
+            ls, lw = ("-", 5) if "SR" in label else ("--", 3)
             ax_speed.plot(cr_df_plot["datetime"], cr_df_plot[colname], color=color, lw=lw, linestyle=ls, label=label)
             plot_peaks(ax_speed, sir_dicts[label], df[colname], time_all, time_cr, icme_mask,
                       color=color, markersize=12)
@@ -431,32 +437,167 @@ def plot_speed_profile_cr_with_euv(df, cr_df, panels, series_specs, icme_interva
         idx = (df["datetime"] - pd.Timestamp(dt_arrow_end)).abs().idxmin()
         arrow_y = float(df.loc[idx, sr_col]) if sr_col and pd.notna(df.loc[idx, sr_col]) else 500.0
         ax_speed.annotate("", xy=(dt_arrow_end, arrow_y), xytext=(dt_now, arrow_y),
-                         arrowprops=dict(arrowstyle="-|>", color=color_now, lw=2.5, mutation_scale=18), zorder=14)
+                         arrowprops=dict(arrowstyle="-|>", color=color_now, lw=3.0, mutation_scale=22), zorder=14)
         ax_speed.text(dt_now + timedelta(days=propagation_delay_days / 2), arrow_y + 12,
-                     f"+{propagation_delay_days} days", ha="center", va="bottom", fontsize=20,
+                     f"+{propagation_delay_days} days", ha="center", va="bottom", fontsize=24,
                      color=color_now, fontweight="bold", zorder=15)
 
         ax_speed.set_xlim(t_plot_start, t_plot_end)
         ax_speed.set_ylim(250, 900)
         ax_speed.set_yticks([400, 600, 800])
-        ax_speed.tick_params(axis="y", labelsize=26)
+        ax_speed.tick_params(axis="y", labelsize=30)
         ax_speed.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
         ax_speed.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-        ax_speed.tick_params(axis="x", labelsize=26)
-        ax_speed.set_ylabel("Speed [km/s]", fontsize=28, labelpad=15)
+        ax_speed.tick_params(axis="x", labelsize=30)
+        ax_speed.set_ylabel("Speed [km/s]", fontsize=34, labelpad=15)
         ax_speed.set_title(f"CR {target_crs[0]}-{target_crs[1]}  "
                           f"({t_plot_start.strftime('%Y %b %d')} - {t_plot_end.strftime('%Y %b %d')})",
-                          fontsize=28, pad=8)
+                          fontsize=36, pad=10)
         ax_speed.margins(x=0.005)
         if row_idx < n_rows - 1:
             ax_speed.set_xlabel("")
         else:
-            ax_speed.set_xlabel("Date", fontsize=28, labelpad=10)
+            ax_speed.set_xlabel("Date", fontsize=36, labelpad=10)
 
     handles, labels = axes_speed[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=len(labels), fontsize=26,
-              frameon=False, bbox_to_anchor=(0.665, 1.02))
+    fig.legend(handles, labels, loc="upper center", ncol=len(labels), fontsize=32,
+              frameon=False, bbox_to_anchor=(0.64, 0.975))
+    plt.tight_layout(rect=[0, 0, 1, 0.88 if n_rows > 1 else 0.82])
 
     if save_path:
-        plt.savefig(save_path, dpi=200, bbox_inches="tight", facecolor="white")
+        plt.savefig(save_path, dpi=400, bbox_inches="tight", facecolor="white")
+    return fig
+
+
+def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_intervals,
+                                         aia_dir="../data/sample",
+                                         color_prev="mediumpurple", color_now="mediumblue",
+                                         row_labels=None, save_path=None):
+    """
+    Same 3-row Carrington-Rotation speed-profile plot as plot_speed_profile_cr
+    (unchanged size/layout for that part), with a 2xN grid of AIA 193A EUV
+    images (SPoCA CH contours) added below instead of beside each row -- one
+    column per panel, in the same left-to-right order as the speed rows
+    above, top EUV row = dt_prev, bottom EUV row = dt_now. Vertical lines on
+    each speed panel mark dt_prev/dt_now in the same colors as the EUV
+    panels' borders, so a reader can trace which images go with which speed
+    profile.
+
+    panels : list of dicts, each {"label": str, "crs": [cr1, cr2],
+             "dt_prev": datetime, "dt_now": datetime} -- same order as the
+             speed rows above (dt_prev is typically 27 days before dt_now,
+             showing the source CH's prior appearance).
+    aia_dir : folder containing the 193A FITS files for dt_prev/dt_now of
+             every panel (nearest-timestamp match, see _find_nearest_fits).
+    row_labels : optional (label_prev, label_now) tuple shown to the left of
+                the bottom two EUV rows (e.g. ("27 days prior", "Current"));
+                omitted entirely if None.
+    """
+    time_all = df["datetime"]
+    icme_mask = make_icme_mask(time_all, icme_intervals)
+    has_band = {"max_sqrt_AP", "min_sqrt_AP"}.issubset(df.columns)
+    sr_col = next((c for c, l in series_specs if "SR" in l), None)
+
+    sir_dicts = {"OMNI": detect_HSE_blocks(time_all, df["speed"])}
+    for colname, label in series_specs:
+        sir_dicts[label] = detect_HSE_blocks(time_all, df[colname])
+
+    aia_data = []
+    for panel in panels:
+        f_prev = _find_nearest_fits(aia_dir, panel["dt_prev"])
+        f_now = _find_nearest_fits(aia_dir, panel["dt_now"])
+        aia_prev, aia_now = load_and_calibrate(f_prev)[1], load_and_calibrate(f_now)[1]
+        poly_prev = get_spoca_ch_union(aia_prev, hours=1)
+        poly_now = get_spoca_ch_union(aia_now, hours=1)
+        rgba_prev, ext_prev = get_rgba_and_extent(aia_prev, "193")
+        rgba_now, ext_now = get_rgba_and_extent(aia_now, "193")
+        aia_data.append(dict(aia_prev=aia_prev, rgba_prev=rgba_prev, ext_prev=ext_prev, poly_prev=poly_prev,
+                             aia_now=aia_now, rgba_now=rgba_now, ext_now=ext_now, poly_now=poly_now))
+
+    n_panels = len(panels)
+    fig = plt.figure(figsize=(30, 5 * n_panels + 2.5 + 18), facecolor="white")
+    gs = gridspec.GridSpec(n_panels + 2, n_panels, height_ratios=[5] * n_panels + [9, 9],
+                           hspace=0.4, wspace=0.12, top=0.95, bottom=0.03, left=0.05, right=0.99)
+
+    axes_speed = []
+    for row_idx, panel in enumerate(panels):
+        ax_speed = fig.add_subplot(gs[row_idx, :])
+        axes_speed.append(ax_speed)
+
+        target_crs = panel["crs"]
+        t_starts, t_ends = zip(*[get_cr_date_range(cr_df, cr) for cr in target_crs])
+        t_plot_start, t_plot_end = min(t_starts), max(t_ends)
+        cr_df_plot = df[(time_all >= t_plot_start) & (time_all < t_plot_end)]
+        time_cr = cr_df_plot["datetime"]
+
+        shade_icme(ax_speed, icme_intervals, t0=t_plot_start, t1=t_plot_end, facecolor="gray", alpha=0.4)
+        ax_speed.axvline(t_ends[0], color="gray", linestyle=":", linewidth=3, alpha=0.8)
+        for cr_num, t_s in zip(target_crs, t_starts):
+            ax_speed.text(t_s + timedelta(hours=6), 868, f"CR {cr_num}", ha="left", va="top",
+                         fontsize=32, color="gray")
+
+        if has_band and sr_col:
+            ax_speed.fill_between(cr_df_plot["datetime"],
+                                 cr_df_plot[sr_col] - df.loc[cr_df_plot.index, "min_sqrt_AP"],
+                                 cr_df_plot[sr_col] + df.loc[cr_df_plot.index, "max_sqrt_AP"],
+                                 color="red", alpha=0.2)
+
+        ax_speed.plot(cr_df_plot["datetime"], cr_df_plot["speed"], color=MODEL_COLORS["OMNI"], lw=5, label="OMNI")
+        plot_peaks(ax_speed, sir_dicts["OMNI"], df["speed"], time_all, time_cr, icme_mask,
+                  color=MODEL_COLORS["OMNI"], markersize=12)
+        for colname, label in series_specs:
+            color = MODEL_COLORS.get(label, "gray")
+            ls, lw = ("-", 5) if "SR" in label else ("--", 3)
+            ax_speed.plot(cr_df_plot["datetime"], cr_df_plot[colname], color=color, lw=lw, linestyle=ls, label=label)
+            plot_peaks(ax_speed, sir_dicts[label], df[colname], time_all, time_cr, icme_mask,
+                      color=color, markersize=12)
+
+        dt_prev, dt_now = panel["dt_prev"], panel["dt_now"]
+        ax_speed.axvline(dt_prev, color=color_prev, lw=5, ls="--", zorder=10, alpha=0.9)
+        ax_speed.axvline(dt_now, color=color_now, lw=5, ls="-", zorder=10, alpha=0.9)
+
+        ax_speed.set_xlim(t_plot_start, t_plot_end)
+        ax_speed.set_ylim(250, 900)
+        ax_speed.set_yticks([400, 600, 800])
+        ax_speed.tick_params(axis="y", labelsize=30)
+        ax_speed.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+        ax_speed.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+        ax_speed.tick_params(axis="x", labelsize=30)
+        ax_speed.set_ylabel("Speed [km/s]", fontsize=34, labelpad=15)
+        ax_speed.set_title(f"CR {target_crs[0]}-{target_crs[1]}  "
+                          f"({t_plot_start.strftime('%Y %b %d')} - {t_plot_end.strftime('%Y %b %d')})",
+                          fontsize=36, pad=10)
+        ax_speed.margins(x=0.005)
+        if row_idx < n_panels - 1:
+            ax_speed.set_xlabel("")
+        else:
+            ax_speed.set_xlabel("Date", fontsize=36, labelpad=10)
+
+    handles, labels = axes_speed[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=len(labels), fontsize=32,
+              frameon=False, bbox_to_anchor=(0.5, 0.985))
+
+    for col_idx, (panel, data) in enumerate(zip(panels, aia_data)):
+        for row_off, key, dt, color in [(0, "prev", panel["dt_prev"], color_prev),
+                                        (1, "now", panel["dt_now"], color_now)]:
+            ax_euv = fig.add_subplot(gs[n_panels + row_off, col_idx])
+            ax_euv.set_facecolor("black")
+            ax_euv.imshow(data[f"rgba_{key}"], origin="lower", extent=data[f"ext_{key}"])
+            draw_ch_contour(ax_euv, data[f"aia_{key}"], data[f"poly_{key}"], data[f"ext_{key}"])
+            set_hpc_axes(ax_euv, data[f"ext_{key}"], show_xlabel=False, show_ylabel=False,
+                        label_fs=1, tick_fs=16, grid=True)
+            ax_euv.set_xticks([])
+            ax_euv.set_yticks([])
+            for spine in ax_euv.spines.values():
+                spine.set_edgecolor(color); spine.set_linewidth(6)
+            ax_euv.set_title(dt.strftime("%Y %b %d (%H:%M UT)"), fontsize=26, color=color, pad=10)
+
+            if row_labels and col_idx == 0:
+                label_text = row_labels[row_off]
+                ax_euv.text(-0.12, 0.5, label_text, transform=ax_euv.transAxes,
+                           fontsize=28, color=color, rotation=90,
+                           ha="center", va="center")
+
+    if save_path:
+        plt.savefig(save_path, dpi=400, bbox_inches="tight", facecolor="white")
     return fig
