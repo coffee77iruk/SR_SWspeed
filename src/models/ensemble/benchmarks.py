@@ -21,7 +21,7 @@ def load_full_series_with_benchmarks(extra_cols: list = None, eswf_path: str = _
     a network fetch of the Carrington-rotation table, Oct-Dec only, ~10-15s).
 
     Requires the caller to have already added the repo's src/ directory to
-    sys.path (same convention as scripts/02_prepare_sr_data.py).
+    sys.path.
     """
     from data.benchmark.empirical_model.eswf3_2 import eswf32_from_file
     from data.benchmark.wsa_enlil.wsa_enlil_ccmc import WSA_ENLIL

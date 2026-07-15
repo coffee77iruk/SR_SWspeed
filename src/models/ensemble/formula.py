@@ -58,7 +58,7 @@ def load_train_set(csv_path: str = _DEFAULT_DATA_PATH, ch_threshold: float = 0.0
 
     Any noise-scale / calibration decision for the ensemble must be made on
     this training split, not load_test_set() - the Oct-Dec test set is held
-    out for final evaluation only (see scripts/03_run_sr_model.py).
+    out for final evaluation only.
 
     Adds an 'is_ch_present' column (A_CH60_193_lag4 >= ch_threshold) so
     callers can separate CH-absent rows, where a/alpha perturbations are
