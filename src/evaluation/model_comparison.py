@@ -205,7 +205,7 @@ def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
             cc = np.nan
         row = {"MAE": round(mae, 2), "RMSE": round(rmse, 2), "CC": round(cc, 3), "N": n}
     if include_dtw:
-        row["DTW"] = _dtw_score(y_true, y_pred, window=dtw_window)
+        row["DTW_mean"] = _dtw_score(y_true, y_pred, window=dtw_window)
     return row
 
 
@@ -330,7 +330,7 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                 # extra matched pairs they actually produced, instead of
                 # concentrating that cost onto a point count that doesn't
                 # reflect the repeated matches.
-                row["DTW"] = round(dtw_total / path_len_total, 2) if path_len_total > 0 else np.nan
+                row["DTW_mean"] = round(dtw_total / path_len_total, 2) if path_len_total > 0 else np.nan
             row["model"] = model
             if group_col:
                 row[group_col] = group_val
