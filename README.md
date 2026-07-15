@@ -32,18 +32,19 @@ Entire test period (2010–2024, Oct–Dec months, ICME periods excluded):
 
 | Model | MAE [km/s] | RMSE [km/s] | CC | DTW_mean [km/s] |
 |---|---|---|---|---|
-| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **34.8** |
-| 27-day persistence | 70.9 | 96.2 | 0.46 | 39.1 |
-| ESWF | 82.3 | 108.9 | 0.38 | 47.1 |
-| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 65.8 |
+| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **28.9** |
+| 27-day persistence | 70.9 | 96.2 | 0.46 | 31.9 |
+| ESWF | 82.3 | 108.9 | 0.38 | 37.2 |
+| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 54.8 |
 
 DTW_mean (mean Dynamic Time Warping distance, Samara et al. 2022; Edward-Inatimi
 et al. 2026 -- reported here as cost-per-matched-pair, i.e. the raw DTW cost
 divided by the warping path's length rather than the raw point count, so it's
-on the same km/s scale as MAE/RMSE without diluting singularities) captures
-whether the *shape*/timing of predicted speed enhancements matches
-observations, not just pointwise error — the SR-derived formula has the
-lowest (best) DTW_mean of all four models.
+on the same km/s scale as MAE/RMSE without diluting singularities, over a
++-2-day Sakoe-Chiba window following Samara et al. (2022)'s own EUHFORIA
+window) captures whether the *shape*/timing of predicted speed enhancements
+matches observations, not just pointwise error — the SR-derived formula has
+the lowest (best) DTW_mean of all four models.
 
 <p align="center">
   <img src="figures/figure1_ch_parameters.png" alt="A_CH and P_CH computation from SDO/AIA EUV images" width="850">

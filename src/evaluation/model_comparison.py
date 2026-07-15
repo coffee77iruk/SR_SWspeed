@@ -91,7 +91,7 @@ def _dtw_score(y_true, y_pred, window=None):
     *default* inner distance is squared Euclidean with a single sqrt at the
     end instead, which is a materially different number, not this one.
 
-    window is a Sakoe-Chiba band size in samples (e.g. 24 for +-1 day of
+    window is a Sakoe-Chiba band size in samples (e.g. 48 for +-2 days of
     hourly data).
 
     Returns (distance, path_length) for the block passed in. distance is the
