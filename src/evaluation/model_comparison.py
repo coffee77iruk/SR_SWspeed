@@ -71,11 +71,18 @@ def build_comparison_df(data_dir="../data"):
 
 def _dtw_score(y_true, y_pred, window=None):
     """
-    Dynamic Time Warping distance (Samara et al. 2022; Edward-Inatimi et al. 2026),
-    computed directly on the physical-unit (km/s) speed series -- no z-scoring.
-    window is a Sakoe-Chiba band size in samples (e.g. 48 for +-2 days of hourly
-    data, the window Samara et al. 2022 found appropriate for solar wind HSS
-    timing uncertainty).
+    Dynamic Time Warping distance, computed directly on the physical-unit
+    (km/s) speed series -- no z-scoring. Uses dtaidistance's inner_dist=
+    "euclidean" mode, i.e. D(i,j) = |s_i - q_j| + min(D(i-1,j-1), D(i-1,j),
+    D(i,j-1)) with the raw cumulative sum returned as-is (no final sqrt).
+    This matches both the equation in Samara et al. (2022) and the actual
+    implementation in their cited reference code
+    (github.com/SamaraEvangelia/DTW_ForSolarWindEvaluation) -- dtaidistance's
+    *default* inner distance is squared Euclidean with a single sqrt at the
+    end instead, which is a materially different number, not this one.
+
+    window is a Sakoe-Chiba band size in samples (e.g. 24 for +-1 day of
+    hourly data).
 
     This is a relative metric intended for comparing models evaluated on the
     same series (same N, e.g. different model columns within one Table-2 phase
@@ -91,7 +98,7 @@ def _dtw_score(y_true, y_pred, window=None):
         return np.nan
 
     kwargs = {"window": window} if window is not None else {}
-    return round(dtw_lib.distance(yt, yp, **kwargs), 2)
+    return round(dtw_lib.distance(yt, yp, inner_dist="euclidean", **kwargs), 2)
 
 
 def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
