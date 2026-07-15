@@ -69,26 +69,29 @@ def build_comparison_df(data_dir="../data"):
     return df, cr_df
 
 
-def _dtw_normalized(y_true, y_pred, window=None):
-    """Dynamic Time Warping distance (Samara et al. 2022), z-score normalized."""
+def _dtw_score(y_true, y_pred, window=None):
+    """
+    Dynamic Time Warping distance (Samara et al. 2022; Edward-Inatimi et al. 2026),
+    computed directly on the physical-unit (km/s) speed series -- no z-scoring.
+    window is a Sakoe-Chiba band size in samples (e.g. 48 for +-2 days of hourly
+    data, the window Samara et al. 2022 found appropriate for solar wind HSS
+    timing uncertainty).
+
+    This is a relative metric intended for comparing models evaluated on the
+    same series (same N, e.g. different model columns within one Table-2 phase
+    row) -- like Samara's and Edward-Inatimi's own DTW score, it is not
+    length-normalized, so raw values should not be compared across groups with
+    different N (e.g. across phases with different row counts).
+    """
     from dtaidistance import dtw as dtw_lib
 
     mask = ~(np.isnan(y_true) | np.isnan(y_pred))
-    yt, yp = y_true[mask], y_pred[mask]
-    n = len(yt)
-    if n < 2:
-        return np.nan, np.nan
-
-    def zscore(x):
-        mu, sigma = np.mean(x), np.std(x)
-        return (x - mu) / sigma if sigma > 0 else x - mu
-
-    yt_z = zscore(yt).astype(np.double)
-    yp_z = zscore(yp).astype(np.double)
+    yt, yp = y_true[mask].astype(np.double), y_pred[mask].astype(np.double)
+    if len(yt) < 2:
+        return np.nan
 
     kwargs = {"window": window} if window is not None else {}
-    dist = dtw_lib.distance(yt_z, yp_z, **kwargs)
-    return round(dist / n, 6), round(dist, 2)
+    return round(dtw_lib.distance(yt, yp, **kwargs), 2)
 
 
 def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
@@ -110,9 +113,7 @@ def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
             cc = np.nan
         row = {"MAE": round(mae, 2), "RMSE": round(rmse, 2), "CC": round(cc, 3), "N": n}
     if include_dtw:
-        dtw_norm, dtw_raw = _dtw_normalized(y_true, y_pred, window=dtw_window)
-        row["DTW_norm"] = dtw_norm
-        row["DTW_raw"] = dtw_raw
+        row["DTW"] = _dtw_score(y_true, y_pred, window=dtw_window)
     return row
 
 
