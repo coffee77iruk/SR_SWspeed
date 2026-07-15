@@ -30,12 +30,17 @@ periods excluded), both as a continuous time series and as a high-speed-event
 
 Entire test period (2010–2024, Oct–Dec months, ICME periods excluded):
 
-| Model | MAE [km/s] | RMSE [km/s] | CC |
-|---|---|---|---|
-| **SR-derived formula** | **60.0** | **78.4** | **0.55** |
-| 27-day persistence | 70.9 | 96.2 | 0.46 |
-| ESWF | 82.3 | 108.9 | 0.38 |
-| WSA-ENLIL | 91.3 | 120.3 | 0.36 |
+| Model | MAE [km/s] | RMSE [km/s] | CC | DTW |
+|---|---|---|---|---|
+| **SR-derived formula** | **60.0** | **78.4** | **0.55** | **9229** |
+| 27-day persistence | 70.9 | 96.2 | 0.46 | 10831 |
+| ESWF | 82.3 | 108.9 | 0.38 | 12065 |
+| WSA-ENLIL | 91.3 | 120.3 | 0.36 | 15899 |
+
+DTW (Dynamic Time Warping distance, Samara et al. 2022; Edward-Inatimi et al. 2026)
+captures whether the *shape*/timing of predicted speed enhancements matches
+observations, not just pointwise error — the SR-derived formula has the lowest
+(best) DTW distance of all four models.
 
 <p align="center">
   <img src="figures/figure1_ch_parameters.png" alt="A_CH and P_CH computation from SDO/AIA EUV images" width="850">
@@ -57,10 +62,6 @@ Entire test period (2010–2024, Oct–Dec months, ICME periods excluded):
 
 ```
 SR_SWspeed/
-├── scripts/                     # end-to-end pipeline, run in order
-│   ├── 01_get_parameters.py     #   FITS -> A_CH / P_CH CSVs
-│   ├── 02_prepare_sr_data.py    #   CH params + OMNI -> phase-segmented SR datasets
-│   └── 03_run_sr_model.py       #   PySR training (LOGO-CV, per solar-cycle phase)
 ├── notebooks/
 │   ├── 01_convert_to_level1.5.ipynb   # AIA level 1 -> 1.5 calibration walkthrough
 │   ├── 02_get_CH_parameter.ipynb      # A_CH / P_CH computation walkthrough
@@ -86,23 +87,12 @@ conda activate venv        # see requirements.txt for the full dependency list
 > 🚧 `requirements.txt` is still being finalized — check back soon for the pinned
 > dependency list.
 
-## 🚀 Reproducing the pipeline
+## 🚀 Pipeline
 
-```bash
-# 1. Extract A_CH / P_CH from SDO/AIA FITS files
-python scripts/01_get_parameters.py --channel "193,211" --start "2010-01-01" --end "2025-01-01" \
-    --base_dir "D:/Data/AIA_level1" --save_dir "../data/interim" --cores 12
-
-# 2. Build phase-segmented SR training datasets (rising/maximum/declining/minimum/entire)
-python scripts/02_prepare_sr_data.py
-
-# 3. Train the symbolic regression model (LOGO-CV, matches the paper)
-python scripts/03_run_sr_model.py --phase entire
-```
-
-Each script's own docstring has the full flag reference. `notebooks/01`–`06` walk
-through the same pipeline interactively, ending with the performance verification
-and HSS event-detection tables/figures used in the paper.
+`notebooks/01`–`06` walk through the full methodology interactively: AIA level-1.5
+calibration, $A_{CH}$/$P_{CH}$ extraction, latitude-band comparison, SR input feature
+importance, and the performance verification (Table 2, Taylor diagram) and
+HSS event-detection results used in the paper.
 
 ## 📖 Citation
 
