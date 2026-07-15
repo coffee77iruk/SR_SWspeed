@@ -209,22 +209,19 @@ __marimo__/
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
 
-# Regenerable full-timeline dataset (207MB, exceeds GitHub's 100MB limit).
-# Exact row-wise union of SR_training_{rising,maximum,declining,minimum}.csv;
-# reconstruct with pd.concat([...]).sort_values('datetime') or rerun scripts/02_prepare_sr_data.py.
+# Regenerable full-timeline dataset (207MB, exceeds GitHub's 100MB limit) --
+# exact row-wise union of the per-phase training CSVs.
 data/processed/SR_training_entire.csv
 
-# Superseded intermediate artifact -- nothing in notebooks/ or scripts/ reads this;
-# regenerate locally with scripts/make_ch_param_df.py if needed.
+# Superseded intermediate artifact, unused elsewhere in this repo.
 data/processed/CH_param_df.csv
 
-# Redundant with the figures already embedded inline in the notebooks that
-# write them (notebooks/supplementary/ensemble_model/, corotation_1au/) --
-# unlike outputs/<run_id>/ PySR artifacts, trivially regenerable in seconds.
+# Redundant with figures already embedded inline elsewhere; trivially regenerable.
 outputs/ensemble/
 outputs/corotation/
 
-# Working/exploratory notebooks kept local-only (not ready for the public repo).
+# Local-only, not part of the public repo.
 figures/make_figures.ipynb
 figures/gif/make_gif.ipynb
 notebooks/supplementary/
+scripts/
