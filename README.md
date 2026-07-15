@@ -74,12 +74,12 @@ SR_SWspeed/
 │   ├── 02_get_CH_parameter.ipynb      # A_CH / P_CH computation walkthrough
 │   ├── 03_compare_CH_parameters.ipynb # latitude-band parameter comparison
 │   ├── 04_feature_importance.ipynb    # SR input feature importance
-│   ├── 05_verify_performance.ipynb    # Table 2 + Taylor diagram: SR vs. baselines
+│   ├── 05_verify_performance.ipynb    # Table 1 (formula selection) + Table 2 + Taylor diagram
 │   └── 06_hss_event_detection.ipynb   # HSS/SIR event-based verification
 ├── src/
 │   ├── data/         # FITS calibration, CH extraction, benchmark model loaders
 │   ├── models/        # PySR config, corotation projection, ensemble variants
-│   ├── evaluation/     # metrics (MAE/RMSE/CC/DTW), event detection & scoring
+│   ├── evaluation/     # metrics (MAE/RMSE/CC/DTW/SSF), event detection & scoring
 │   ├── viz/            # all figure-generation code
 │   └── utils/          # ICME masking, CH preprocessing, shared helpers
 └── figures/            # published figure PNGs
@@ -98,8 +98,8 @@ conda activate venv        # see requirements.txt for the full dependency list
 
 `notebooks/01`–`06` walk through the full methodology interactively: AIA level-1.5
 calibration, $A_{CH}$/$P_{CH}$ extraction, latitude-band comparison, SR input feature
-importance, and the performance verification (Table 2, Taylor diagram) and
-HSS event-detection results used in the paper.
+importance, and the performance verification (PySR formula-selection Table 1,
+Table 2, Taylor diagram) and HSS event-detection results used in the paper.
 
 ## 📖 Citation
 

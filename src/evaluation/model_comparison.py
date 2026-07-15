@@ -212,7 +212,7 @@ def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
 def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                      model_cols=None, test_months=(10, 11, 12),
                      include_dtw=False, dtw_window=None, train_months=range(1, 10),
-                     dtw_gap_tolerance_hours=DTW_GAP_TOLERANCE_HOURS):
+                     dtw_gap_tolerance_hours=DTW_GAP_TOLERANCE_HOURS, verbose=False):
     """
     Evaluate MAE/RMSE/CC (optionally DTW) on the Oct-Dec test months, ICME
     periods excluded, for each candidate model column.
@@ -241,6 +241,10 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
     than starting a new DTW block -- see _build_dtw_blocks(). Gaps that
     overlap an ICME interval are always hard block breaks regardless of
     this setting.
+
+    verbose : print the actual "av" constant used for each group (entire
+    period / year / phase) as it's computed, so it's clear exactly which
+    Jan-Sep training mean backs each row's av baseline.
     """
     df = df.copy()
     df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
@@ -284,6 +288,10 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
             av_const = train_df.loc[train_df["datetime"].dt.year.isin(group_years), target_col].mean()
             sub_df["av"] = av_const
             cols = cols + ["av"]
+            if verbose:
+                group_desc = f"{group_col}={group_val}" if group_col else "entire period"
+                print(f"[av] {group_desc}: {av_const:.2f} km/s "
+                     f"(Jan-Sep training mean, years {sorted(group_years)})")
 
         dtw_cols = cols
         if include_dtw:
