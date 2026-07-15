@@ -34,21 +34,28 @@ def clean_header(aia_map):
     return aia_map
 
 # Pointing correction
-def Pointing_correction(aia_map):
+def Pointing_correction(aia_map, pointing_table=None):
     """
     We consider the satellite's attitude changes and movements to adjust the positioning of AIA images.
+
+    pointing_table : pre-fetched table from get_pointing_table(), spanning a
+    wide enough window to cover aia_map.date (update_pointing() searches the
+    whole table for the matching row regardless of its size). Pass this in
+    to skip a fresh JSOC network round-trip per call -- if omitted, falls
+    back to fetching a narrow +-6h window for this map's own date, as before.
     """
     aia_map = clean_header(aia_map)  # Clean the header first
-    ref_date = parse_time(aia_map.date.isot)
-    # select a lmsal or jsoc
-    pointing_tbl = get_pointing_table(
-        "jsoc", 
-        time_range=(ref_date - 6*u.hour, ref_date + 6*u.hour)
-    )
+    if pointing_table is None:
+        ref_date = parse_time(aia_map.date.isot)
+        # select a lmsal or jsoc
+        pointing_table = get_pointing_table(
+            "jsoc",
+            time_range=(ref_date - 6*u.hour, ref_date + 6*u.hour)
+        )
     if aia_map.meta.get("SAT_ROT") is None:
         aia_map.meta["SAT_ROT"] = 0.0
-    
-    aia_map_pt = aiapy.calibrate.update_pointing(aia_map, pointing_table=pointing_tbl)
+
+    aia_map_pt = aiapy.calibrate.update_pointing(aia_map, pointing_table=pointing_table)
     return aia_map_pt
 
 # Registration
@@ -66,17 +73,24 @@ def Registration(aia_map):
     )
     return aia_map_reg
 
-# Degradation correction 
-def Degradation_correction(aia_map):
+# Degradation correction
+def Degradation_correction(aia_map, correction_table=None):
     """
-    We calibrate the degradation of AIA data to ensure 
+    We calibrate the degradation of AIA data to ensure
     that the physical brightness is consistent across different channels.
+
+    correction_table : pre-fetched table from get_correction_table("SSW").
+    This table isn't scoped to any particular date (get_correction_table
+    takes no time_range), so it's identical on every call for a given SSW
+    version -- pass one in to skip a redundant network fetch per call. If
+    omitted, falls back to fetching it fresh, as before.
     """
     aia_map = clean_header(aia_map)
-    corr_tbl = get_correction_table("SSW")
+    if correction_table is None:
+        correction_table = get_correction_table("SSW")
     aia_map_cal = aiapy.calibrate.correct_degradation(
-        aia_map, 
-        correction_table=corr_tbl
+        aia_map,
+        correction_table=correction_table
     )
     return aia_map_cal
 
@@ -95,13 +109,17 @@ def Exposure_normalization(aia_map):
     return aia_map_norm
 
 # Main function to convert level 1 to level 1.5
-def convert_to_level1_5(aia_map):
+def convert_to_level1_5(aia_map, pointing_table=None, correction_table=None):
     """
     Convert SDO/AIA data from level 1 to level 1.5.
+
+    pointing_table/correction_table : optional pre-fetched tables (see
+    Pointing_correction/Degradation_correction) to avoid a fresh network
+    fetch on every call -- useful when converting many maps in a batch.
     """
-    aia_map = Pointing_correction(aia_map)      # Step 1: Pointing correction
-    aia_map = Registration(aia_map)             # Step 4: Registration
-    aia_map = Degradation_correction(aia_map)   # Step 5: Degradation correction
-    aia_map = Exposure_normalization(aia_map)   # Step 6: Exposure normalization
+    aia_map = Pointing_correction(aia_map, pointing_table=pointing_table)      # Step 1: Pointing correction
+    aia_map = Registration(aia_map)                                           # Step 4: Registration
+    aia_map = Degradation_correction(aia_map, correction_table=correction_table)  # Step 5: Degradation correction
+    aia_map = Exposure_normalization(aia_map)                                  # Step 6: Exposure normalization
 
     return aia_map
