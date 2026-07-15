@@ -84,21 +84,27 @@ def _dtw_score(y_true, y_pred, window=None):
     window is a Sakoe-Chiba band size in samples (e.g. 24 for +-1 day of
     hourly data).
 
-    This is a relative metric intended for comparing models evaluated on the
-    same series (same N, e.g. different model columns within one Table-2 phase
-    row) -- like Samara's and Edward-Inatimi's own DTW score, it is not
-    length-normalized, so raw values should not be compared across groups with
-    different N (e.g. across phases with different row counts).
+    Returns (distance, path_length) for the block passed in. distance is the
+    raw cumulative sum (not divided by anything). path_length is the number
+    of matched pairs in the optimal warping path -- >= max(len(yt), len(yp)),
+    and strictly larger whenever a singularity (a point matched to more than
+    one point in the other series) occurs. evaluate_metrics() sums both
+    across every calendar-contiguous block in a group and divides
+    distance-sum by path-length-sum, so the reported average is a true "cost
+    per matched pair" (sum of terms / count of terms) rather than diluting
+    singularity-heavy alignments across a plain point count that doesn't
+    reflect how many times each point was actually matched.
     """
     from dtaidistance import dtw as dtw_lib
 
     mask = ~(np.isnan(y_true) | np.isnan(y_pred))
     yt, yp = y_true[mask].astype(np.double), y_pred[mask].astype(np.double)
     if len(yt) < 2:
-        return np.nan
+        return np.nan, 0
 
     kwargs = {"window": window} if window is not None else {}
-    return round(dtw_lib.distance(yt, yp, inner_dist="euclidean", **kwargs), 2)
+    path, dist = dtw_lib.warping_path(yt, yp, include_distance=True, inner_dist="euclidean", **kwargs)
+    return round(dist, 2), len(path)
 
 
 def _row_metrics(y_true, y_pred, include_dtw=False, dtw_window=None):
@@ -210,15 +216,26 @@ def evaluate_metrics(df, group_by=None, groups=None, target_col="speed",
                 # over each contiguous block, instead of flattening the whole
                 # group into one sequence.
                 block_id = (sub_df["datetime"].diff().dt.total_seconds() > 3600).cumsum()
-                dtw_total, any_valid = 0.0, False
+                dtw_total, path_len_total = 0.0, 0
                 for _, block in sub_df.groupby(block_id):
                     if len(block) < 2:
                         continue
-                    d = _dtw_score(block[target_col].values, block[model].values, window=dtw_window)
+                    d, plen = _dtw_score(block[target_col].values, block[model].values, window=dtw_window)
                     if not np.isnan(d):
                         dtw_total += d
-                        any_valid = True
-                row["DTW"] = round(dtw_total, 2) if any_valid else np.nan
+                        path_len_total += plen
+                # Report cost-per-matched-pair (total cost / total warping
+                # path length), not the raw sum: a sum has no natural
+                # comparison point across groups with different N (e.g.
+                # across phases), while this average stays in km/s and is
+                # directly comparable to MAE/RMSE in the same table -- both
+                # within a row and across rows. Dividing by path length
+                # rather than plain point count N correctly dilutes
+                # singularities (points matched more than once) across the
+                # extra matched pairs they actually produced, instead of
+                # concentrating that cost onto a point count that doesn't
+                # reflect the repeated matches.
+                row["DTW"] = round(dtw_total / path_len_total, 2) if path_len_total > 0 else np.nan
             row["model"] = model
             if group_col:
                 row[group_col] = group_val
