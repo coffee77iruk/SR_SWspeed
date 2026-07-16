@@ -134,7 +134,7 @@ def plot_speed_profile_by_year(df, series_specs, icme_intervals, years=range(201
     plt.tight_layout(rect=[0, 0, 1, 0.98])
 
     if save_path:
-        plt.savefig(save_path, dpi=600)
+        plt.savefig(save_path, dpi=500)
     return fig, all_peak_lists
 
 
@@ -236,7 +236,7 @@ def plot_speed_profile_cr(df, cr_df, cr_pairs, series_specs, icme_intervals,
     plt.tight_layout(rect=[0, 0, 1, 0.92 if n_rows > 1 else 0.86])
 
     if save_path:
-        plt.savefig(save_path, dpi=600)
+        plt.savefig(save_path, dpi=500)
     return fig
 
 
@@ -465,7 +465,7 @@ def plot_speed_profile_cr_with_euv(df, cr_df, panels, series_specs, icme_interva
     plt.tight_layout(rect=[0, 0, 1, 0.88 if n_rows > 1 else 0.82])
 
     if save_path:
-        plt.savefig(save_path, dpi=600, bbox_inches="tight", facecolor="white")
+        plt.savefig(save_path, dpi=500, bbox_inches="tight", facecolor="white")
     return fig
 
 
@@ -619,5 +619,5 @@ def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_i
                        bbox=dict(facecolor="none", edgecolor="none"))
 
     if save_path:
-        plt.savefig(save_path, dpi=600, bbox_inches="tight", facecolor="white")
+        plt.savefig(save_path, dpi=500, bbox_inches="tight", facecolor="white")
     return fig

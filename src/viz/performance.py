@@ -128,7 +128,7 @@ def plot_sr_vs_sunspot(metrics_yearly_df, date, sunspot_m, sunspot_ms,
               fontsize=fontsize - 2, frameon=False, bbox_to_anchor=(0.5, 1.02))
     plt.tight_layout(w_pad=3, rect=[0, 0, 1, 0.96])
     if save_path:
-        plt.savefig(save_path, dpi=600, facecolor="none" if transparent else "white", bbox_inches="tight")
+        plt.savefig(save_path, dpi=500, facecolor="none" if transparent else "white", bbox_inches="tight")
     return fig
 
 
@@ -201,7 +201,7 @@ def plot_binned_performance(stats_dict, bin_labels, color_map,
               framealpha=0, bbox_to_anchor=(0.5, 0.99))
 
     if save_path:
-        plt.savefig(save_path, dpi=600, bbox_inches="tight",
+        plt.savefig(save_path, dpi=500, bbox_inches="tight",
                    facecolor="none" if transparent else "white")
     return fig
 
