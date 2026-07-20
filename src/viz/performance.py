@@ -133,7 +133,7 @@ def plot_sr_vs_sunspot(metrics_yearly_df, date, sunspot_m, sunspot_ms,
 
 
 def plot_binned_performance(stats_dict, bin_labels, color_map,
-                            metrics=("MAE", "RMSE", "Bias"), figsize=(20, 24),
+                            metrics=("MAE", "RMSE", "Bias"), figsize=(15.5, 16.8),
                             transparent=False, save_path=None):
     """Line plot (with bootstrap CI error bars) of binned MAE/RMSE/Bias/CC,
     one row per metric (stacked, not side-by-side) so the shared x-axis
@@ -181,12 +181,12 @@ def plot_binned_performance(stats_dict, bin_labels, color_map,
 
         ax.set_xticks(x)
         if row_idx == len(metrics) - 1:
-            ax.set_xticklabels(bin_labels_n, fontsize=29)
-            ax.set_xlabel("OMNI speed range [km/s]", fontsize=34, labelpad=12)
+            ax.set_xticklabels(bin_labels_n, fontsize=22)
+            ax.set_xlabel("OMNI speed range [km/s]", fontsize=26, labelpad=12)
         else:
             ax.set_xticklabels([])
-        ax.set_ylabel(metric, fontsize=34)
-        ax.tick_params(axis="y", labelsize=29)
+        ax.set_ylabel(metric, fontsize=26)
+        ax.tick_params(axis="y", labelsize=22)
         ax.grid(axis="y", alpha=0.35)
 
     # Draw order (from `models`) controls z-order -- SR-derived formula is
@@ -197,8 +197,8 @@ def plot_binned_performance(stats_dict, bin_labels, color_map,
         idx = labels.index("SR-derived formula")
         handles = [handles[idx]] + handles[:idx] + handles[idx + 1:]
         labels = [labels[idx]] + labels[:idx] + labels[idx + 1:]
-    fig.legend(handles, labels, loc="upper center", ncol=len(models), fontsize=29,
-              framealpha=0, bbox_to_anchor=(0.5, 0.99))
+    fig.legend(handles, labels, loc="upper center", ncol=len(models), fontsize=22,
+              framealpha=0, bbox_to_anchor=(0.5, 1.0))
 
     if save_path:
         plt.savefig(save_path, dpi=500, bbox_inches="tight",

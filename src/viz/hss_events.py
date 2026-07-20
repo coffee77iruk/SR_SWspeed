@@ -599,7 +599,7 @@ def plot_speed_profile_cr_with_euv_below(df, cr_df, panels, series_specs, icme_i
 
     for panel_idx, (panel, data) in enumerate(zip(panels, aia_data)):
         color = panel_colors[panel_idx]
-        for sub_col, key, dt, ls in [(0, "prev", panel["dt_prev"], (0, (1, 5))), (1, "now", panel["dt_now"], "-")]:
+        for sub_col, key, dt, ls in [(0, "prev", panel["dt_prev"], (0, (2.5, 5))), (1, "now", panel["dt_now"], "-")]:
             col_idx = panel_idx * 2 + sub_col
             ax_euv = fig.add_subplot(gs_euv[0, col_idx])
             ax_euv.set_facecolor("black")
