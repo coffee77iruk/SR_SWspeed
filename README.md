@@ -13,8 +13,8 @@ High-speed solar wind streams from coronal holes (CHs) drive recurrent geomagnet
 disturbances with a periodicity of approximately 27 days. This repo applies **symbolic
 regression (SR)**, via [PySR](https://github.com/MilesCranmer/PySR), to derive a
 compact, interpretable formula that predicts solar wind speed at 1 AU from two
-EUV-derived CH parameters — the fractional CH area ($A_{CH}$) and CH contrast
-($P_{CH}$), both derived from SDO/AIA 193/211 Å images — together with prior solar
+EUV-derived CH parameters, the fractional CH area ($A_{CH}$) and CH contrast
+($P_{CH}$), both derived from SDO/AIA 193/211 Å images, together with prior solar
 wind speeds. The model is trained on 2010-2024 OMNI data (January-September) and
 evaluated on a held-out test set (October-December each year), with ICME periods
 excluded.
@@ -26,8 +26,8 @@ $$v_t = \sqrt{A_{CH60,\,t-4d} \times P_{CH30,\,t-4d}} + \sqrt{v_{t-27d} \times 3
 was selected from PySR's complexity/loss Pareto front as the simplest candidate that
 combines both $A_{CH}$ and $P_{CH}$, balancing accuracy against expression simplicity
 (see `notebooks/05_verify_performance.ipynb`'s Table 1 for the full candidate list).
-It is compared against three baseline models — **WSA-ENLIL**, **ESWF**, and 27-day
-persistence — plus an **average** (training-set-mean) baseline, both as a continuous
+It is compared against three baseline models, **WSA-ENLIL**, **ESWF**, and 27-day
+persistence, plus an **average** (training-set-mean) baseline, both as a continuous
 time series and as a high-speed-event (HSS) detection problem.
 
 ## 📊 Key result
@@ -45,12 +45,12 @@ Entire test period (2010–2024, October–December each year, ICME periods excl
 The SR-derived formula outperforms all four baseline models in MAE and RMSE, and
 outperforms WSA-ENLIL/ESWF/persistence in CC, across every solar cycle phase and the
 entire period. The average baseline beats WSA-ENLIL and ESWF in MAE/RMSE despite
-predicting a constant speed per phase — a reminder that pointwise error alone doesn't
+predicting a constant speed per phase, a reminder that pointwise error alone doesn't
 imply real predictive skill. SSF (Sequence Similarity Factor, Samara et al. 2022)
 addresses this by scoring each model's dynamic-time-warping alignment cost against
 OMNI, normalized against a reference (SSF_mean: the test period's own mean speed;
 SSF_27days: the persistence baseline, so persistence's own SSF_27days is
-exactly 1.000 by construction) — the SR-derived formula achieves the lowest SSF under
+exactly 1.000 by construction), the SR-derived formula achieves the lowest SSF under
 both references.
 
 <p align="center">
