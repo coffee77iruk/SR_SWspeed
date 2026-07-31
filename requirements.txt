@@ -1,0 +1,33 @@
+# Python 3.12. Install into a fresh environment with:
+#   conda create -n venv python=3.12
+#   conda activate venv
+#   pip install -r requirements.txt
+
+# Core numerics / data handling
+numpy==2.2.6
+pandas==2.2.3
+scipy==1.15.3
+scikit-learn==1.6.1
+
+# Solar / heliophysics data access and processing (SDO/AIA FITS, EUV calibration)
+astropy==7.1.0
+sunpy==7.0.1
+aiapy==0.10.1
+shapely==2.1.1
+
+# Symbolic regression
+pysr==1.5.8
+
+# Dynamic Time Warping (DTW/SSF evaluation metrics)
+dtaidistance==2.4.0
+
+# Web/HTML data fetching (ICME catalog, Carrington rotation tables, WSA-ENLIL)
+requests==2.32.3
+beautifulsoup4==4.13.4
+
+# Plotting
+matplotlib==3.10.9
+
+# Progress bars / notebooks
+tqdm==4.67.3
+jupyter==1.1.1

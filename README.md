@@ -88,11 +88,10 @@ SR_SWspeed/
 ## ⚙️ Setup
 
 ```bash
-conda activate venv        # see requirements.txt for the full dependency list
+conda create -n venv python=3.12
+conda activate venv
+pip install -r requirements.txt
 ```
-
-> 🚧 `requirements.txt` is still being finalized — check back soon for the pinned
-> dependency list.
 
 ## 🚀 Pipeline
 
