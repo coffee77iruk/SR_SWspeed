@@ -34,7 +34,7 @@ time series and as a high-speed-event (HSS) detection problem.
 
 Entire test period (2010–2024, October–December each year, ICME periods excluded):
 
-| Model | MAE [km/s] | RMSE [km/s] | CC | SSF$_{mean}$ | SSF$_{27days}$ |
+| Model | MAE [km/s] | RMSE [km/s] | CC | SSF_mean | SSF_27days |
 |---|---|---|---|---|---|
 | **SR-derived formula** | **60.0** | **78.4** | **0.55** | **0.574** | **0.911** |
 | WSA-ENLIL | 91.3 | 120.3 | 0.36 | 0.981 | 1.556 |
@@ -48,8 +48,8 @@ entire period. The average baseline beats WSA-ENLIL and ESWF in MAE/RMSE despite
 predicting a constant speed per phase — a reminder that pointwise error alone doesn't
 imply real predictive skill. SSF (Sequence Similarity Factor, Samara et al. 2022)
 addresses this by scoring each model's dynamic-time-warping alignment cost against
-OMNI, normalized against a reference (SSF$_{mean}$: the test period's own mean speed;
-SSF$_{27days}$: the persistence baseline, so persistence's own SSF$_{27days}$ is
+OMNI, normalized against a reference (SSF_mean: the test period's own mean speed;
+SSF_27days: the persistence baseline, so persistence's own SSF_27days is
 exactly 1.000 by construction) — the SR-derived formula achieves the lowest SSF under
 both references.
 
