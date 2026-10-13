@@ -2,8 +2,8 @@
 
 **A Data-Driven Empirical Formula for Solar Wind Speed Prediction Using Symbolic Regression**
 
-> 📝 **Status:** the paper is currently **under revision at *The Astrophysical Journal Supplement Series* (ApJS)**.
-> A DOI is not available yet — this section will be updated with the full citation once it's assigned.
+> 📝 **Published** in *The Astrophysical Journal Supplement Series* (ApJS), 286, 58 (2026).
+> DOI: [10.3847/1538-4365/ae985f](https://doi.org/10.3847/1538-4365/ae985f)
 
 ---
 
@@ -108,9 +108,21 @@ Table 2, Taylor diagram) and HSS event-detection results used in the paper.
 
 ```
 Seungwoo Ahn, Youngjae Kim, Mingyu Jeon, Hyun-Jin Jeong, Daeil Kim, Junmu Youn,
-and Yong-Jae Moon, "A Data-Driven Empirical Formula for Solar Wind Speed
+and Yong-Jae Moon, "A Data-driven Empirical Formula for Solar Wind Speed
 Prediction Using Symbolic Regression," The Astrophysical Journal Supplement
-Series (in revision).
+Series, 286, 58 (2026). https://doi.org/10.3847/1538-4365/ae985f
 ```
 
-A full citation with DOI will be added once the paper is accepted and published.
+```bibtex
+@article{Ahn2026,
+  author  = {Ahn, Seungwoo and Kim, Youngjae and Jeon, Mingyu and Jeong, Hyun-Jin and
+             Kim, Daeil and Youn, Junmu and Moon, Yong-Jae},
+  title   = {A Data-driven Empirical Formula for Solar Wind Speed Prediction Using Symbolic Regression},
+  journal = {The Astrophysical Journal Supplement Series},
+  volume  = {286},
+  number  = {2},
+  pages   = {58},
+  year    = {2026},
+  doi     = {10.3847/1538-4365/ae985f}
+}
+```
